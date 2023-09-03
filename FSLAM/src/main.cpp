@@ -21,6 +21,9 @@
 #include "IOWrapper/OutputWrapper/SampleOutputWrapper.h"
 
 
+#include <cxxopts.hpp>
+
+
 using namespace HSLAM;
 
 void my_exit_handler(int s)
@@ -40,71 +43,74 @@ void exitThread()
 	while(true) pause();
 }
 
-const cv::String keys =
-	"{help h usage ?  |      | print this message}"
-	"{files           |<none>| Input images path - mandatory input}"
-	"{calib           |<none>| Camera intrinsic callibration - mandatory input}"
-	"{vocabPath       |      | Vocabulary path}"
-	"{vignette        |      | Path to Vignette model}"
-	"{gamma           |      | Path to gamma response Model}"
-	"{LoopClosure     | False| Enable-Disable loop closure}"
-	"{reverse         | False| Play a sequence in reverse}"
-	"{preload         | False| preload all images into memory}"
-	"{useSampleOutput | False| replace pangolinViewer with another output wrapper}"
-	"{nolog           | False| disable logging optimization data}"
-	"{nogui           | False| disable GUI}"
-	"{save            | False| save debug images}"
-	"{quiet           | True | disable message printing }"
-	"{nomt            | False| when set to true it turns off multiThreading}"
-	"{startIndex      | 0    | Image index to start from}"
-	"{endIndex        |100000| Last image to be processed }"
-	"{mode            | 0    | system mode: 0: use precalibrated gamma and vignette -1: photometric mode without calibration - 2: photometric mode with perfect images}"
-	"{preset          | 0    | preset configuration}"
-	"{speed           | 0.0  | Enforce playback Speed to real-time}";
-
 
 int main(int argc, char **argv)
-{	
-	printf("MAIN is called from FSLAM original"); //debugNA
+{
 	boost::thread exThread = boost::thread(exitThread); // hook crtl+C.
 
-	cv::CommandLineParser parser(argc, argv, keys);
-	std::string vignette = parser.get<std::string>("vignette");
-	std::string gammaCalib = parser.get<std::string>("gamma");
-	std::string source = parser.get<std::string>("files");
-	std::string calib = parser.get<std::string>("calib");
-	std::string vocabPath = parser.get<std::string>("vocabPath");
-	LoopClosure = parser.get<bool>("LoopClosure");
-	bool reverse = parser.get<bool>("reverse");
-	bool preload = parser.get<bool>("preload");
-	bool useSampleOutput = parser.get<bool>("useSampleOutput");
-	setting_debugout_runquiet = parser.get<bool>("quiet");
-	setting_logStuff = !parser.get<bool>("nolog");
-	disableAllDisplay = parser.get<bool>("nogui");
-	debugSaveImages = parser.get<bool>("save");
-	multiThreading = !parser.get<bool>("nomt");
-	int startIndex = parser.get<int>("startIndex");
-	int endIndex = parser.get<int>("endIndex");
-	int preset = parser.get<int>("preset");
-	int mode =  parser.get<int>("mode");
-	float playbackSpeed = parser.get<float>("speed"); // 0 for linearize (play as fast as possible, while sequentializing tracking & mapping). otherwise, factor on timestamps.
-	
-	if (parser.has("help") || parser.has("h") || parser.has("usage") || parser.has("?"))
-	{
-    	parser.printMessage();
-    	return 0;
-	}
+	cxxopts::Options options("HSLAM", "Direct Indirect Feature Fusion SLAM");
 
-	if(source.empty() || calib.empty()) { std::cout<< "path to images or calibration not provided! cannot function without them. exit." << std::endl; return(0);}
+	std::string source = "";
+	std::string calib = "";
+	std::string vocabPath = "";
+	std::string vignette = "";
+	std::string gammaCalib = "";
 
-	if (!parser.check()) {parser.printErrors(); return 0; }
+	options.add_options()
+        ("f,files", "Input images path - mandatory input", cxxopts::value(source))
+		("c,calib", "Camera intrinsic callibration - mandatory input", cxxopts::value(calib))
+		("v,vocab", "Path to Vocabulary file - required for loop closure", cxxopts::value(vocabPath))
+		("n,vignette", "Path to photmetric calibration Vignette model", cxxopts::value(vignette))
+		("g,gamma", "Path to photmetric calibration gamma response Model", cxxopts::value(gammaCalib))
+		("l,loopclosure", "Enable-Disable loop closure", cxxopts::value<bool>()->default_value("false"))
+		("r,reverse", "Play a sequence in reverse", cxxopts::value<bool>()->default_value("false"))
+		("preload", "Preload all images into memory", cxxopts::value<bool>()->default_value("false"))
+		("usesampleoutput", "Replace pangolinViewer with another output wrapper", cxxopts::value<bool>()->default_value("false"))
+		("nolog", "Disable logging optimization data", cxxopts::value<bool>()->default_value("false"))
+		("nogui", "Disable GUI", cxxopts::value<bool>()->default_value("false"))
+		("save", "Save debug images", cxxopts::value<bool>()->default_value("false"))
+		("quiet", "Disable message printing", cxxopts::value<bool>()->default_value("true"))
+		("nomt", "Turns off multiThreading", cxxopts::value<bool>()->default_value("false"))
+		("s,startindex", "Image to start from", cxxopts::value<int>()->default_value("0"))
+        ("e,endindex", "Last image to be processed", cxxopts::value<int>()->default_value("100000"))
+		("m,mode", "System mode: 0: use precalibrated gamma and vignette -1: photometric mode without calibration - 2: photometric mode with perfect images", cxxopts::value<int>()->default_value("1"))
+        ("preset", "Preset configuration}", cxxopts::value<int>()->default_value("0"))
+		("speed", "Enforce playback Speed to real-time", cxxopts::value<float>()->default_value("0.0"))
+        ("h,help", "Print usage")
+    ;
+
+	auto result = options.parse(argc, argv);
+
+	if (result.count("help"))
+    {
+		std::cout << options.help() << std::endl;
+		exit(0);
+    }
+
+	LoopClosure = result["loopclosure"].as<bool>();
+	bool reverse = result["reverse"].as<bool>();
+	bool preload = result["preload"].as<bool>();
+	bool useSampleOutput = result["usesampleoutput"].as<bool>();
+	setting_logStuff = !result["nolog"].as<bool>();
+	disableAllDisplay = result["nogui"].as<bool>();
+	debugSaveImages = result["save"].as<bool>();
+	setting_debugout_runquiet = result["quiet"].as<bool>();
+	multiThreading = !result["nomt"].as<bool>();
+
+	int startIndex = result["startindex"].as<int>();
+	int endIndex = result["endindex"].as<int>();
+	int preset = result["preset"].as<int>();
+	int mode = result["mode"].as<int>();
+	float playbackSpeed = result["speed"].as<float>(); // 0 for linearize (play as fast as possible, while sequentializing tracking & mapping). otherwise, factor on timestamps.
+
+	if(source.empty() || calib.empty()) { std::cout<< "Path to images or calibration not provided! cannot function without them. exit." << std::endl; return(0);}
 
 	if (debugSaveImages)
 	{
 		if(42==system("rm -rf images_out")) std::cout<<"system call returned 42 - what are the odds?. This is only here to shut up the compiler.\n"<<std::endl;
-			if(42==system("mkdir images_out")) std::cout<<"system call returned 42 - what are the odds?. This is only here to shut up the compiler.\n"<<std::endl;
-			if(42==system("rm -rf images_out")) std::cout<<"system call returned 42 - what are the odds?. This is only here to shut up the compiler.\n"<<std::endl;
-			if(42==system("mkdir images_out")) std::cout<<"system call returned 42 - what are the odds?. This is only here to shut up the compiler.\n"<<std::endl;
+		if(42==system("mkdir images_out")) std::cout<<"system call returned 42 - what are the odds?. This is only here to shut up the compiler.\n"<<std::endl;
+		if(42==system("rm -rf images_out")) std::cout<<"system call returned 42 - what are the odds?. This is only here to shut up the compiler.\n"<<std::endl;
+		if(42==system("mkdir images_out")) std::cout<<"system call returned 42 - what are the odds?. This is only here to shut up the compiler.\n"<<std::endl;
 	}
 
 	switch (mode)
@@ -128,10 +134,10 @@ int main(int argc, char **argv)
 	{
 		Vocab.load(vocabPath.c_str());
 
-		printf("loading Vocabulary from %s!\n", vocabPath.c_str());
+		printf("Loading Vocabulary from %s!\n", vocabPath.c_str());
 		if (Vocab.empty())
 		{
-			printf("failed to load vocabulary! Exit\n");
+			printf("Failed to load vocabulary! Exit\n");
 			exit(1);
 		}
 	}
@@ -260,8 +266,7 @@ int main(int argc, char **argv)
 
 
         for(int ii=0;ii<(int)idsToPlay.size(); ii++)
-        {	
-			//printf("IDs to Play size: %li \n", idsToPlay.size());//debugNA
+        {
 			while (Pause)
 			{
 				usleep(5000);
