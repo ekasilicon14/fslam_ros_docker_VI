@@ -387,3 +387,118 @@ private:
 #endif
 };
 
+
+class IMUFolderReader
+{
+public:
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
+
+	IMUFolderReader(std::string path, std::string calibFile){
+		this->path = path;
+		this->calibfile = calibFile;
+	}
+
+	~IMUFolderReader(){}
+
+	void getIMUfiles_euroc(){
+		std::ifstream inf;
+		inf.open(path);
+
+		std::string sline;
+		std::getline(inf,sline);
+
+		while(std::getline(inf,sline)){
+			std::istringstream ss(sline);
+
+			// Get timestamp
+			double time;
+			ss>>time;
+			time = time/1e9;
+
+			// Get gyro and acceleration data
+			Vec3 gyro,acc;
+			char temp;
+			for(int i=0;i<3;++i){
+				ss>>temp;
+				ss>>gyro(i);
+			}
+			for(int i=0;i<3;++i){
+				ss>>temp;
+				ss>>acc(i);
+			}
+
+			m_gry.push_back(gyro);
+			m_acc.push_back(acc);
+			imu_time_stamp.push_back(time);
+		}
+		inf.close();
+	}
+
+	void getIMUinfo_euroc(){
+		std::ifstream inf;
+		inf.open(calibfile);
+
+		std::string sline;
+		int line = 0;
+		Mat33 R;
+		Vec3 t;
+		Vec4 noise;
+
+		// Translation between IMU and camera
+		while(line<3&&std::getline(inf,sline)){
+			std::istringstream ss(sline);
+			for(int i=0;i<3;++i){
+				ss>>R(line,i);
+			}
+			ss>>t(line);
+			++line;
+		}
+		SE3 temp(R,t);
+		T_BC = temp;
+
+		// IMU bias parameters
+		std::getline(inf,sline);
+		++line;
+		while(line<8&&std::getline(inf,sline)){
+			std::istringstream ss(sline);
+			ss>>noise(line-4);
+			++line;
+		}
+		GyrCov = Mat33::Identity()*noise(0)*noise(0)/0.005;
+		AccCov = Mat33::Identity()*noise(1)*noise(1)/0.005;
+		GyrRandomWalkNoise = Mat33::Identity()*noise(2)*noise(2);
+		AccRandomWalkNoise = Mat33::Identity()*noise(3)*noise(3);
+		
+		inf.close();
+	}
+
+	Vec3 get_gyrodata(int i){
+		return m_gry[i];
+	}
+
+	Vec3 get_acceldata(int i){
+		return m_acc[i];
+	}
+
+	double get_timestampdata(int i){
+		return imu_time_stamp[i];
+	}
+
+private:
+	// Calibration parameters
+	SE3 T_BC;
+	Mat33 GyrCov;
+	Mat33 AccCov;
+	Mat33 GyrRandomWalkNoise;
+	Mat33 AccRandomWalkNoise;
+	
+	// Paths
+	std::string path;
+	std::string calibfile;
+
+	// Data
+	std::vector<Vec3> m_gry;
+	std::vector<Vec3> m_acc;
+	std::vector<double> imu_time_stamp;
+};
+

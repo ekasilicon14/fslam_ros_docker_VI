@@ -115,7 +115,7 @@ inline bool eigenTestNan(const MatXX &m, std::string msg)
 class FullSystem
 {
 public:
-	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 	FullSystem();
 	virtual ~FullSystem();
 
