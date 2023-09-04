@@ -124,10 +124,8 @@ FullSystem::FullSystem()
 	globalMap = std::make_shared<Map>();
 	matcher = std::make_shared<Matcher>();
 	if(LoopClosure)
-		{
-			//printf("LOOP CLOSURE ON, from FULLSYSTEM \n");//debugNA
-			loopCloser = std::make_shared<LoopCloser>(this);
-		}
+		// std::make_shared will not use the eigen alignment macro and cause an alignment error
+		loopCloser = std::shared_ptr<LoopCloser> (new LoopCloser(this));
 
 	Velocity = SE3();
 
@@ -506,7 +504,7 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 		coarseTracker->firstCoarseRMSE = achievedRes[0];
 
     if(!setting_debugout_runquiet)
-       // printf("Coarse Tracker tracked ab = %f %f (exp %f). Res %f!\n", aff_g2l.a, aff_g2l.b, fh->ab_exposure, achievedRes[0]);
+        printf("Coarse Tracker tracked ab = %f %f (exp %f). Res %f!\n", aff_g2l.a, aff_g2l.b, fh->ab_exposure, achievedRes[0]);
 
 
 
@@ -1137,11 +1135,11 @@ void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 }
 
 void FullSystem::mappingLoop()
-{	
+{
 	boost::unique_lock<boost::mutex> lock(trackMapSyncMutex);
-	
+
 	while(runMapping)
-	{   	
+	{
 		while(unmappedTrackedFrames.size()==0)
 		{
 			trackedFrameSignal.wait(lock);
@@ -1209,7 +1207,7 @@ void FullSystem::mappingLoop()
 }
 
 void FullSystem::blockUntilMappingIsFinished()
-{	
+{
 	boost::unique_lock<boost::mutex> lock(trackMapSyncMutex);
 	runMapping = false;
 	trackedFrameSignal.notify_all();
@@ -1223,8 +1221,8 @@ void FullSystem::blockUntilMappingIsFinished()
 		// 	globalMap->lastOptimizeAllKFs();
 		// }
 	}
+
 	mappingThread.join();
-	printf("Mapping Thread has been joined\n"); //debugNA
 
 }
 

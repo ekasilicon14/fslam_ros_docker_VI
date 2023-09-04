@@ -592,7 +592,7 @@ namespace HSLAM
         return nFound;
     }
 
-    int Matcher::SearchBySim3Projection(std::shared_ptr<Frame> pKF, Sim3 Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, std::vector<std::shared_ptr<MapPoint>> &vpMatched, int th)
+    int Matcher::SearchBySim3Projection(std::shared_ptr<Frame> pKF, const Sim3& Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, std::vector<std::shared_ptr<MapPoint>> &vpMatched, int th)
     {
         // Get Calibration Parameters for later projection
         const float &fx = pKF->HCalib->fxl();
@@ -712,7 +712,7 @@ namespace HSLAM
         return nmatches;
     }
 
-    int Matcher::Fuse(std::shared_ptr<Frame> pKF, Sim3 Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, float th, std::vector<std::shared_ptr<MapPoint>> &vpReplacePoint) //this is run from mapping thread or loop closure thread -> access mvpMapPoints
+    int Matcher::Fuse(std::shared_ptr<Frame> pKF, const Sim3& Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, float th, std::vector<std::shared_ptr<MapPoint>> &vpReplacePoint) //this is run from mapping thread or loop closure thread -> access mvpMapPoints
     {
         // Get Calibration Parameters for later projection
         const float &fx = pKF->HCalib->fxl();

@@ -81,7 +81,7 @@ namespace HSLAM
         int SearchByBow(std::shared_ptr<Frame> frame1, std::shared_ptr<Frame> frame2, float nnRatio, bool mbCheckOrientation, std::vector<std::shared_ptr<MapPoint>> &matches);
 
         int SearchBySim3(std::shared_ptr<Frame> pKF1, std::shared_ptr<Frame> pKF2, std::vector<std::shared_ptr<MapPoint>> &vpMatches12, const float &s12, const Mat33f &R12, const Vec3f &t12, const float th);
-        int SearchBySim3Projection(std::shared_ptr<Frame> pKF, Sim3 Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, std::vector<std::shared_ptr<MapPoint>> &vpMatched, int th);
+        int SearchBySim3Projection(std::shared_ptr<Frame> pKF, const Sim3& Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, std::vector<std::shared_ptr<MapPoint>> &vpMatched, int th);
 
 
         int searchWithEpipolar(std::shared_ptr<Frame> pKF1, std::shared_ptr<Frame> pKF2, std::vector<std::pair<size_t, size_t>> &vMatchedPairs, bool mbCheckOrientation = true);
@@ -92,7 +92,7 @@ namespace HSLAM
         int SearchLocalMapByProjection(std::shared_ptr<Frame> F, std::vector<std::shared_ptr<MapPoint>> &vpMapPoints, float th, float nnratio);
         int SearchByProjectionFrameToFrame(std::shared_ptr<Frame> CurrentFrame, const std::shared_ptr<Frame> LastFrame, const float th, bool mbCheckOrientation = true);
 
-        int Fuse(std::shared_ptr<Frame> pKF, Sim3 Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, float th, std::vector<std::shared_ptr<MapPoint>> &vpReplacePoint);
+        int Fuse(std::shared_ptr<Frame> pKF, const Sim3& Scw, const std::vector<std::shared_ptr<MapPoint>> &vpPoints, float th, std::vector<std::shared_ptr<MapPoint>> &vpReplacePoint);
         int Fuse(std::shared_ptr<Frame> pKF, const std::vector<std::shared_ptr<MapPoint>> &vpMapPoints, const float th);
 
         inline static int DescriptorDistance(const cv::Mat &a, const cv::Mat &b)

@@ -19,11 +19,10 @@ namespace HSLAM {
     class CalibHessian;
     class Matcher;
 
-
+    
     class LoopCloser {
     public:
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-
         LoopCloser(FullSystem *fullSystem);
 
         ~LoopCloser() {
@@ -39,6 +38,8 @@ namespace HSLAM {
         void copyActiveMapData(std::vector<std::shared_ptr<Frame>> & _KFs ,std::vector<std::shared_ptr<MapPoint>> & _MPs);
 
     private:
+        Sim3 mScw;
+
         // data
         FullSystem *fullSystem;
         std::weak_ptr<Map> globalMap;  // global map
@@ -66,7 +67,6 @@ namespace HSLAM {
 
         long unsigned int mLastLoopKFid=0;
 
-        Sim3 mScw;
         std::vector<std::shared_ptr<MapPoint>> mvpCurrentMatchedPoints;
         std::vector<std::shared_ptr<MapPoint>> mvpLoopMapPoints;
 
