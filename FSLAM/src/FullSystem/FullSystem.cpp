@@ -38,6 +38,8 @@
 
 #include <cmath>
 
+#include "FullSystem/IMUPreintegrator.h"
+
 namespace HSLAM
 {
 int FrameHessian::instanceCounter=0;

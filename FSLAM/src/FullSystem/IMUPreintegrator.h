@@ -4,6 +4,58 @@
 
 namespace HSLAM
 {
+class IMUVariables{
+public:
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    IMUVariables(){
+        m_step_twd = Vec7::Zero();
+        m_state_twd = Vec7::Zero();
+
+        imu_track_ready = false;
+        m_M_num = 0;
+        m_M_num2 = 0;
+    }
+
+    void set_TWDl_2_TWDl_half(){
+        m_T_WD_l = m_T_WD_l_half;
+    }
+
+    void set_TWDl_half_2_TWD(){
+        m_T_WD_l_half = m_T_WD;
+    }
+
+    void reset_Mnum(){
+        m_M_num = 0;
+    }
+
+    void increment_Mnum(){
+        m_M_num++;
+    }
+
+    void increment_Mnum2(){
+        m_M_num2++;
+    }
+
+    void set_Mnum2_2_Mnum(){
+        m_M_num2 = m_M_num;
+    }
+
+    void set_m_state_twd(){
+        m_state_twd = Sim3(m_T_WD_l.inverse()*m_T_WD).log();
+    }
+
+    Sim3 m_T_WD;
+    Sim3 m_T_WD_l;
+    Sim3 m_T_WD_l_half;
+
+    Vec7 m_step_twd;
+    Vec7 m_state_twd;
+
+    bool imu_track_ready = false;
+    int m_M_num;
+    int m_M_num2;
+};
 
 class IMUPreintegrator{
 public:

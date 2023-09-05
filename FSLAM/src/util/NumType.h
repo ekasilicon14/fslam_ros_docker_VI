@@ -43,17 +43,20 @@ typedef Eigen::Matrix<double,Eigen::Dynamic,Eigen::Dynamic> MatXX;
 typedef Eigen::Matrix<double,CPARS,CPARS> MatCC;
 #define MatToDynamic(x) MatXX(x)
 
-
-
+typedef Eigen::Matrix<double,17,17> Mat1717;
+typedef Eigen::Matrix<double,15,15> Mat1515;
 typedef Eigen::Matrix<double,CPARS,10> MatC10;
 typedef Eigen::Matrix<double,10,10> Mat1010;
 typedef Eigen::Matrix<double,13,13> Mat1313;
 
+typedef Eigen::Matrix<double,9,15> Mat915;
 typedef Eigen::Matrix<double,9,9> Mat99;
+typedef Eigen::Matrix<double,9,7> Mat97;
 typedef Eigen::Matrix<double,9,3> Mat93;
 typedef Eigen::Matrix<double,8,10> Mat810;
 typedef Eigen::Matrix<double,8,3> Mat83;
 typedef Eigen::Matrix<double,8,3> Mat83;
+typedef Eigen::Matrix<double,7,3> Mat73;
 typedef Eigen::Matrix<double,6,6> Mat66;
 typedef Eigen::Matrix<double,5,3> Mat53;
 typedef Eigen::Matrix<double,4,3> Mat43;
@@ -70,6 +73,7 @@ typedef Eigen::Matrix<double,7,7> Mat77;
 
 typedef Eigen::Matrix<double,CPARS,1> VecC;
 typedef Eigen::Matrix<float,CPARS,1> VecCf;
+typedef Eigen::Matrix<double,17,1> Vec17;
 typedef Eigen::Matrix<double,13,1> Vec13;
 typedef Eigen::Matrix<double,10,1> Vec10;
 typedef Eigen::Matrix<double,9,1> Vec9;
