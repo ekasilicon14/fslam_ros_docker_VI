@@ -76,6 +76,7 @@ float setting_initialTransPrior = 1e10;
 float setting_initialAffBPrior = 1e14;
 float setting_initialAffAPrior = 1e14;
 float setting_initialCalibHessian = 5e9;
+
 float setting_initialIMUHessian = 5e7;
 float setting_initialScaleHessian = 5e5;
 float setting_initialbaHessian = 5e5;
