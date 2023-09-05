@@ -31,6 +31,12 @@ namespace HSLAM
 		int marginalizedAt;
 		double movedByOpt;
 
+		Vec3 velocity;
+		Vec3 bias_g;
+		Vec3 bias_a;
+		Vec3 delta_bias_g;
+		Vec3 delta_bias_a;
+
 		bool isKeyframe;
 		bool needRefresh;
 
@@ -52,6 +58,12 @@ namespace HSLAM
 			trackingRefId = 0;
 			isKeyframe = false;
 			needRefresh = false;
+
+			velocity = Vec3::Zero();
+			bias_g = Vec3::Zero();
+			bias_a = Vec3::Zero();
+			delta_bias_g = Vec3::Zero();
+			delta_bias_a = Vec3::Zero();
 		}
 
 		SE3 getPose() {
