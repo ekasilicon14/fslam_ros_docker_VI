@@ -203,10 +203,19 @@ extern int staticPatternNum[10];
 extern int staticPatternPadding[10];
 
 
-extern bool imu_use_flag;
-extern bool imu_track_flag;
+extern double baseline;
+
+extern double G_norm;
+
 extern double imu_weight;
 extern double imu_weight_tracker;
+
+extern bool imu_use_flag;
+extern bool imu_track_flag;
+
+extern bool use_Dmargin;
+extern double d_min;
+
 extern double setting_margWeightFac_imu;
 
 

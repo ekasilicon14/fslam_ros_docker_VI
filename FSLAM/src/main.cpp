@@ -213,7 +213,7 @@ int main(int argc, char **argv)
 	}
 
 	if(!imu.empty() && !imu_calib.empty()){
-		IMUFolderReader* imu_reader = new IMUFolderReader(imu, imu_calib);
+		IMUData* imu_reader = new IMUData(imu, imu_calib);
 		imu_reader->getIMUfiles_euroc();
 		imu_reader->getIMUinfo_euroc();
 

@@ -43,7 +43,224 @@ bool EFAdjointsValid = false;
 bool EFIndicesValid = false;
 bool EFDeltaValid = false;
 
+void EnergyFunctional::getIMUHessian(MatXX &H, VecX &b, IMUVariables* iv){
+	SE3 T_BC = IMU_Data->getT_BC();
 
+    Sim3 T_WD = iv->m_T_WD;
+    Sim3 T_WD_l = iv->m_T_WD_l;
+
+    H = MatXX::Zero(7+nFrames*15, 7+nFrames*15);
+    b = VecX::Zero(7+nFrames*15);
+
+    if(nFrames==1)return;
+    int count_imu_res = 0;
+    double Energy = 0;
+    for(int i=0;i<frames.size()-1;++i){
+		MatXX J_all = MatXX::Zero(9, 7+nFrames*15);
+		VecX r_all = VecX::Zero(9);
+		//preintegrate
+		Mat33 temp_GyrCov = IMU_Data->getGyrCov();
+		Mat33 temp_AccCov = IMU_Data->getAccCov();
+		IMUPreintegrator IMU_preintegrator(temp_GyrCov, temp_AccCov);
+		IMU_preintegrator.reset();
+		double time_start = frames[i]->data->shell->timestamp;
+		double time_end = frames[i+1]->data->shell->timestamp;
+		double dt = time_end-time_start;
+		
+		count_imu_res++;
+
+		FrameHessian* Framei = frames[i]->data;
+		FrameHessian* Framej = frames[i+1]->data;
+		
+		//bias model
+		MatXX J_all2 = MatXX::Zero(6, 7+nFrames*15);
+		VecX r_all2 = VecX::Zero(6);
+		
+		r_all2.block(0,0,3,1) = Framej->bias_g+Framej->delta_bias_g - (Framei->bias_g+Framei->delta_bias_g);
+		r_all2.block(3,0,3,1) = Framej->bias_a+Framej->delta_bias_a - (Framei->bias_a+Framei->delta_bias_a);
+		
+		J_all2.block(0,7+i*15+9,3,3) = -Mat33::Identity();
+		J_all2.block(0,7+(i+1)*15+9,3,3) = Mat33::Identity();
+		J_all2.block(3,7+i*15+12,3,3) = -Mat33::Identity();
+		J_all2.block(3,7+(i+1)*15+12,3,3) = Mat33::Identity();
+		Mat66 Cov_bias = Mat66::Zero();
+		Cov_bias.block(0,0,3,3) = IMU_Data->getGyrRandomWalkNoise()*dt;
+		Cov_bias.block(3,3,3,3) = IMU_Data->getAccRandomWalkNoise()*dt;
+		Mat66 weight_bias = Mat66::Identity()*imu_weight*imu_weight*Cov_bias.inverse();
+
+		H += J_all2.transpose()*weight_bias*J_all2;
+		b += J_all2.transpose()*weight_bias*r_all2;
+		
+		if(dt>0.5)continue;
+		
+		SE3 worldToCam_i = Framei->get_worldToCam_evalPT();
+		SE3 worldToCam_j = Framej->get_worldToCam_evalPT();
+		SE3 worldToCam_i2 = Framei->PRE_worldToCam;
+		SE3 worldToCam_j2 = Framej->PRE_worldToCam;
+
+		int index;
+		for(int i=0;i<IMU_Data->get_timesize();++i){
+			if(IMU_Data->get_timestampdata(i)>time_start||fabs(time_start-IMU_Data->get_timestampdata(i))<0.001){
+			index = i;
+			break;
+			}
+		}
+		
+		while(1){
+			double delta_t; 
+			if(IMU_Data->get_timestampdata(index+1)<time_end)
+				delta_t = IMU_Data->get_timestampdata(index+1)-IMU_Data->get_timestampdata(index);
+			else{
+				delta_t = time_end - IMU_Data->get_timestampdata(index);
+				if(delta_t<0.000001)break;
+			}
+			IMU_preintegrator.update(IMU_Data->get_gyrodata(index)-Framei->bias_g, IMU_Data->get_acceldata(index)-Framei->bias_a, delta_t);
+			if(IMU_Data->get_timestampdata(index+1)>=time_end)
+			break;
+			index++;
+		}
+		
+		Vec3 g_w;
+		g_w << 0,0,-G_norm;
+		
+		Mat44 M_WB = T_WD.matrix()*worldToCam_i.inverse().matrix()*T_WD.inverse().matrix()*T_BC.inverse().matrix();
+		SE3 T_WB(M_WB);
+		Mat33 R_WB = T_WB.rotationMatrix();
+		Vec3 t_WB = T_WB.translation();
+		
+		Mat44 M_WB2 = T_WD.matrix()*worldToCam_i2.inverse().matrix()*T_WD.inverse().matrix()*T_BC.inverse().matrix();
+		SE3 T_WB2(M_WB2);
+		Mat33 R_WB2 = T_WB2.rotationMatrix();
+		Vec3 t_WB2 = T_WB2.translation();
+		
+		Mat44 M_WBj = T_WD.matrix()*worldToCam_j.inverse().matrix()*T_WD.inverse().matrix()*T_BC.inverse().matrix();
+		SE3 T_WBj(M_WBj);
+		Mat33 R_WBj = T_WBj.rotationMatrix();
+		Vec3 t_WBj = T_WBj.translation();
+		
+		Mat44 M_WBj2 = T_WD.matrix()*worldToCam_j2.inverse().matrix()*T_WD.inverse().matrix()*T_BC.inverse().matrix();
+		SE3 T_WBj2(M_WBj2);
+		Mat33 R_WBj2 = T_WBj2.rotationMatrix();
+		Vec3 t_WBj2 = T_WBj2.translation();
+		
+		Mat33 R_temp = SO3::exp(IMU_preintegrator.getJRBiasg()*Framei->delta_bias_g).matrix();
+			
+		Mat33 res_R2 = (IMU_preintegrator.getDeltaR()*R_temp).transpose()*R_WB2.transpose()*R_WBj2;
+		Vec3 res_phi2 = SO3(res_R2).log();
+		Vec3 res_v2 = R_WB2.transpose()*(Framej->velocity-Framei->velocity-g_w*dt)-
+			(IMU_preintegrator.getDeltaV()+IMU_preintegrator.getJVBiasa()*Framei->delta_bias_a+IMU_preintegrator.getJVBiasg()*Framei->delta_bias_g);
+		Vec3 res_p2 = R_WB2.transpose()*(t_WBj2-t_WB2-Framei->velocity*dt-0.5*g_w*dt*dt)-
+			(IMU_preintegrator.getDeltaP()+IMU_preintegrator.getJPBiasa()*Framei->delta_bias_a+IMU_preintegrator.getJPBiasg()*Framei->delta_bias_g);
+		Mat99 Cov = IMU_preintegrator.getCovPVPhi();
+		
+		Mat33 J_resPhi_phi_i = -IMU_preintegrator.JacobianRInv(res_phi2)*R_WBj2.transpose()*R_WB2;
+		Mat33 J_resPhi_phi_j = IMU_preintegrator.JacobianRInv(res_phi2);
+		Mat33 J_resPhi_bg = -IMU_preintegrator.JacobianRInv(res_phi2)*SO3::exp(-res_phi2).matrix()*
+			IMU_preintegrator.JacobianR(IMU_preintegrator.getJRBiasg()*Framei->delta_bias_g)*IMU_preintegrator.getJRBiasg();
+
+		Mat33 J_resV_phi_i = SO3::hat(R_WB2.transpose()*(Framej->velocity - Framei->velocity - g_w*dt));
+		Mat33 J_resV_v_i = -R_WB2.transpose();
+		Mat33 J_resV_v_j = R_WB2.transpose();
+		Mat33 J_resV_ba = -IMU_preintegrator.getJVBiasa();
+		Mat33 J_resV_bg = -IMU_preintegrator.getJVBiasg();
+
+		Mat33 J_resP_p_i = -Mat33::Identity();	
+		Mat33 J_resP_p_j = R_WB2.transpose()*R_WBj2;
+		Mat33 J_resP_bg = -IMU_preintegrator.getJPBiasg();
+		Mat33 J_resP_ba = -IMU_preintegrator.getJPBiasa();
+		Mat33 J_resP_v_i = -R_WB2.transpose()*dt;
+		Mat33 J_resP_phi_i = SO3::hat(R_WB2.transpose()*(t_WBj2 - t_WB2 - Framei->velocity*dt - 0.5*g_w*dt*dt));
+
+		Mat915 J_imui = Mat915::Zero();//rho,phi,v,bias_g,bias_a;
+		J_imui.block(0,0,3,3) = J_resP_p_i;
+		J_imui.block(0,3,3,3) = J_resP_phi_i;
+		J_imui.block(0,6,3,3) = J_resP_v_i;
+		J_imui.block(0,9,3,3) = J_resP_bg;
+		J_imui.block(0,12,3,3) = J_resP_ba;
+		
+		J_imui.block(3,3,3,3) = J_resPhi_phi_i;
+		J_imui.block(3,9,3,3) = J_resPhi_bg;
+		
+		J_imui.block(6,3,3,3) = J_resV_phi_i;
+		J_imui.block(6,6,3,3) = J_resV_v_i;
+		J_imui.block(6,9,3,3) = J_resV_bg;
+		J_imui.block(6,12,3,3) = J_resV_ba;
+		
+		Mat915 J_imuj = Mat915::Zero();
+		J_imuj.block(0,0,3,3) = J_resP_p_j;
+		J_imuj.block(3,3,3,3) = J_resPhi_phi_j;
+		J_imuj.block(6,6,3,3)  = J_resV_v_j;
+		Mat99 Weight = Mat99::Zero();
+		Weight.block(0,0,3,3) = Cov.block(0,0,3,3);
+		Weight.block(3,3,3,3) = Cov.block(6,6,3,3);
+			Weight.block(6,6,3,3) = Cov.block(3,3,3,3);
+		Mat99 Weight2 = Mat99::Zero();
+		for(int i=0;i<9;++i){
+			Weight2(i,i) = Weight(i,i);
+		}
+		Weight = Weight2;
+		Weight = imu_weight*imu_weight*Weight.inverse();
+
+		Vec9 b_1 = Vec9::Zero();
+		b_1.block(0,0,3,1) = res_p2;
+		b_1.block(3,0,3,1) = res_phi2;
+		b_1.block(6,0,3,1) = res_v2;
+		
+		Mat44 T_tempj = T_BC.matrix()*T_WD_l.matrix()*worldToCam_j.matrix();
+		Mat1515 J_relj = Mat1515::Identity();
+		J_relj.block(0,0,6,6) = (-1*Sim3(T_tempj).Adj()).block(0,0,6,6);
+		Mat44 T_tempi = T_BC.matrix()*T_WD_l.matrix()*worldToCam_i.matrix();
+		Mat1515 J_reli = Mat1515::Identity();
+		J_reli.block(0,0,6,6) = (-1*Sim3(T_tempi).Adj()).block(0,0,6,6);
+		
+		Mat77 J_poseb_wd_i= Sim3(T_tempi).Adj()-Sim3(T_BC.matrix()*T_WD_l.matrix()).Adj();
+		Mat77 J_poseb_wd_j= Sim3(T_tempj).Adj()-Sim3(T_BC.matrix()*T_WD_l.matrix()).Adj();
+		J_poseb_wd_i.block(0,0,7,3) = Mat73::Zero();
+		J_poseb_wd_j.block(0,0,7,3) = Mat73::Zero();
+
+		if(frames.size()<setting_maxFrames){
+			J_poseb_wd_i.block(0,0,7,3) = Mat73::Zero();
+			J_poseb_wd_j.block(0,0,7,3) = Mat73::Zero();
+			J_poseb_wd_i.block(0,3,7,3) = Mat73::Zero();
+			J_poseb_wd_j.block(0,3,7,3) = Mat73::Zero();
+			J_poseb_wd_i.block(0,6,7,1) = Vec7::Zero();
+			J_poseb_wd_j.block(0,6,7,1) = Vec7::Zero();
+		}
+		Mat97 J_res_posebi = Mat97::Zero();
+		J_res_posebi.block(0,0,9,6) = J_imui.block(0,0,9,6);
+		Mat97 J_res_posebj = Mat97::Zero();
+		J_res_posebj.block(0,0,9,6) = J_imuj.block(0,0,9,6);
+		Mat66 J_xi_r_l_i = worldToCam_i.Adj().inverse();
+		Mat66 J_xi_r_l_j = worldToCam_j.Adj().inverse();
+		Mat1515 J_r_l_i = Mat1515::Identity();
+		Mat1515 J_r_l_j = Mat1515::Identity();
+		J_r_l_i.block(0,0,6,6) = J_xi_r_l_i;
+		J_r_l_j.block(0,0,6,6) = J_xi_r_l_j;
+		J_all.block(0,0,9,7) += J_res_posebi*J_poseb_wd_i;
+		J_all.block(0,0,9,7) += J_res_posebj*J_poseb_wd_j;
+		J_all.block(0,0,9,3) = Mat93::Zero();
+		
+		J_all.block(0,7+i*15,9,15) += J_imui*J_reli*J_r_l_i;
+		J_all.block(0,7+(i+1)*15,9,15) += J_imuj*J_relj*J_r_l_j;
+		
+		r_all.block(0,0,9,1) += b_1;
+		
+		H += (J_all.transpose()*Weight*J_all);
+		b += (J_all.transpose()*Weight*r_all);
+		
+		Energy = Energy+(r_all.transpose()*Weight*r_all)[0]+(r_all2.transpose()*weight_bias*r_all2)[0];
+    }
+    
+    for(int i=0;i<nFrames;i++){
+		H.block(0,7+i*15,7+nFrames*15,3) *= SCALE_XI_TRANS;
+		H.block(7+i*15,0,3,7+nFrames*15) *= SCALE_XI_TRANS;
+		b.block(7+i*15,0,3,1) *= SCALE_XI_TRANS;
+		
+		H.block(0,7+i*15+3,7+nFrames*15,3) *= SCALE_XI_ROT;
+		H.block(7+i*15+3,0,3,7+nFrames*15) *= SCALE_XI_ROT;
+		b.block(7+i*15+3,0,3,1) *= SCALE_XI_ROT;
+    }
+}
 void EnergyFunctional::setAdjointsF(CalibHessian* Hcalib)
 {
 
@@ -124,6 +341,15 @@ EnergyFunctional::EnergyFunctional()
 
 	HM = MatXX::Zero(CPARS,CPARS);
 	bM = VecX::Zero(CPARS);
+	
+	HM_imu = MatXX::Zero(CPARS+7,CPARS+7);
+	bM_imu = VecX::Zero(CPARS+7);
+	
+	HM_bias = MatXX::Zero(CPARS+7,CPARS+7);
+	bM_bias = VecX::Zero(CPARS+7);
+	
+	HM_imu_half = MatXX::Zero(CPARS+7,CPARS+7);
+	bM_imu_half = VecX::Zero(CPARS+7);
 
 
 	accSSE_top_L = new AccumulatedTopHessianSSE();
@@ -132,6 +358,12 @@ EnergyFunctional::EnergyFunctional()
 
 	resInA = resInL = resInM = 0;
 	currentLambda=0;
+
+	s_middle = 1;
+	s_last = 1;
+	d_now = sqrt(1.1);
+	d_half = sqrt(1.1);
+	side_last = true;
 }
 EnergyFunctional::~EnergyFunctional()
 {
@@ -423,7 +655,7 @@ EFResidual* EnergyFunctional::insertResidual(PointFrameResidual* r)
 	efr->idxInAll = r->point->efPoint->residualsAll.size();
 	r->point->efPoint->residualsAll.push_back(efr);
 
-    connectivityMap[(((uint64_t)efr->host->frameID) << 32) + ((uint64_t)efr->target->frameID)][0]++;
+	connectivityMap[(((uint64_t)efr->host->frameID) << 32) + ((uint64_t)efr->target->frameID)][0]++;
 
 	nResiduals++;
 	r->efResidual = efr;
@@ -444,6 +676,26 @@ EFFrame* EnergyFunctional::insertFrame(FrameHessian* fh, CalibHessian* Hcalib)
 	bM.tail<8>().setZero();
 	HM.rightCols<8>().setZero();
 	HM.bottomRows<8>().setZero();
+	
+	if(imu_use_flag){
+		bM_imu.conservativeResize(17*nFrames+CPARS+7);
+		HM_imu.conservativeResize(17*nFrames+CPARS+7,17*nFrames+CPARS+7);
+		bM_imu.tail<17>().setZero();
+		HM_imu.rightCols<17>().setZero();
+		HM_imu.bottomRows<17>().setZero();
+		
+		bM_bias.conservativeResize(17*nFrames+CPARS+7);
+		HM_bias.conservativeResize(17*nFrames+CPARS+7,17*nFrames+CPARS+7);
+		bM_bias.tail<17>().setZero();
+		HM_bias.rightCols<17>().setZero();
+		HM_bias.bottomRows<17>().setZero();
+		
+		bM_imu_half.conservativeResize(17*nFrames+CPARS+7);
+		HM_imu_half.conservativeResize(17*nFrames+CPARS+7,17*nFrames+CPARS+7);
+		bM_imu_half.tail<17>().setZero();
+		HM_imu_half.rightCols<17>().setZero();
+		HM_imu_half.bottomRows<17>().setZero();
+	}
 
 	EFIndicesValid = false;
 	EFAdjointsValid=false;
@@ -492,13 +744,488 @@ void EnergyFunctional::dropResidual(EFResidual* r)
 	else
 		r->host->data->shell->statistics_outlierResOnThis++;
 
-
-    connectivityMap[(((uint64_t)r->host->frameID) << 32) + ((uint64_t)r->target->frameID)][0]--;
+	connectivityMap[(((uint64_t)r->host->frameID) << 32) + ((uint64_t)r->target->frameID)][0]--;
 	nResiduals--;
 	r->data->efResidual=0;
 	delete r;
 }
-void EnergyFunctional::marginalizeFrame(EFFrame* fh)
+
+void EnergyFunctional::marginalizeFrame_imu(EFFrame* fh, IMUVariables* iv){
+  
+	SE3 T_BC = IMU_Data->getT_BC();
+
+    Sim3 T_WD = iv->m_T_WD;
+    Sim3 T_WD_l = iv->m_T_WD_l;
+    Sim3 T_WD_l_half = iv->m_T_WD_l_half;
+
+    int M_num = iv->m_M_num;
+    int M_num2 = iv->m_M_num2;
+
+
+	int ndim = nFrames*17+CPARS+7-17;// new dimension
+	int odim = nFrames*17+CPARS+7;// old dimension
+	if(nFrames >= setting_maxFrames){
+	   iv->imu_track_ready = true;
+	}
+	
+	MatXX HM_change = MatXX::Zero(CPARS+7+nFrames*17, CPARS+7+nFrames*17);
+	VecX bM_change = VecX::Zero(CPARS+7+nFrames*17);
+	
+	MatXX HM_change_half = MatXX::Zero(CPARS+7+nFrames*17, CPARS+7+nFrames*17);
+	VecX bM_change_half = VecX::Zero(CPARS+7+nFrames*17);
+
+	double mar_weight = 0.5;
+	for(int i=fh->idx-1;i<fh->idx+1;i++){
+	    if(i<0)continue;
+	    MatXX J_all = MatXX::Zero(9, CPARS+7+nFrames*17);
+	    MatXX J_all_half = MatXX::Zero(9, CPARS+7+nFrames*17);
+	    VecX r_all = VecX::Zero(9);
+	    Mat33 temp_GyrCov = IMU_Data->getGyrCov();
+		Mat33 temp_AccCov = IMU_Data->getAccCov();
+		IMUPreintegrator IMU_preintegrator(temp_GyrCov, temp_AccCov);
+	    IMU_preintegrator.reset();
+	    double time_start = frames[i]->data->shell->timestamp;
+	    double time_end = frames[i+1]->data->shell->timestamp;
+	    double dt = time_end-time_start;
+	    
+	    if(dt>0.5)continue;
+	    FrameHessian* Framei = frames[i]->data;
+	    FrameHessian* Framej = frames[i+1]->data;
+	    
+	    SE3 worldToCam_i = Framei->get_worldToCam_evalPT();
+	    SE3 worldToCam_j = Framej->get_worldToCam_evalPT();
+	    SE3 worldToCam_i2 = Framei->PRE_worldToCam;
+	    SE3 worldToCam_j2 = Framej->PRE_worldToCam;
+
+	    int index;
+		for(int i=0;i<IMU_Data->get_timesize();++i){
+			if(IMU_Data->get_timestampdata(i)>time_start||fabs(time_start-IMU_Data->get_timestampdata(i))<0.001){
+			index = i;
+			break;
+			}
+		}
+	    
+	    while(1){
+			double delta_t; 
+			if(IMU_Data->get_timestampdata(index+1)<time_end)
+				delta_t = IMU_Data->get_timestampdata(index+1)-IMU_Data->get_timestampdata(index);
+			else{
+				delta_t = time_end - IMU_Data->get_timestampdata(index);
+				if(delta_t<0.000001)break;
+			}
+			IMU_preintegrator.update(IMU_Data->get_gyrodata(index)-Framei->bias_g, IMU_Data->get_acceldata(index)-Framei->bias_a, delta_t);
+			if(IMU_Data->get_timestampdata(index+1)>=time_end)
+			break;
+			index++;
+		}
+	    
+	    Vec3 g_w;
+	    g_w << 0,0,-G_norm;
+	    
+	    Mat44 M_WB2 = T_WD.matrix()*worldToCam_i2.inverse().matrix()*T_WD.inverse().matrix()*T_BC.inverse().matrix();
+	    SE3 T_WB2(M_WB2);
+	    Mat33 R_WB2 = T_WB2.rotationMatrix();
+	    Vec3 t_WB2 = T_WB2.translation();
+	    
+	    Mat44 M_WBj2 = T_WD.matrix()*worldToCam_j2.inverse().matrix()*T_WD.inverse().matrix()*T_BC.inverse().matrix();
+	    SE3 T_WBj2(M_WBj2);
+	    Mat33 R_WBj2 = T_WBj2.rotationMatrix();
+	    Vec3 t_WBj2 = T_WBj2.translation();
+
+	    Mat33 R_temp = SO3::exp(IMU_preintegrator.getJRBiasg()*Framei->delta_bias_g).matrix();
+		    
+	    Mat33 res_R2 = (IMU_preintegrator.getDeltaR()*R_temp).transpose()*R_WB2.transpose()*R_WBj2;
+	    Vec3 res_phi2 = SO3(res_R2).log();
+	    Vec3 res_v2 = R_WB2.transpose()*(Framej->velocity-Framei->velocity-g_w*dt)-
+		    (IMU_preintegrator.getDeltaV()+IMU_preintegrator.getJVBiasa()*Framei->delta_bias_a+IMU_preintegrator.getJVBiasg()*Framei->delta_bias_g);
+	    Vec3 res_p2 = R_WB2.transpose()*(t_WBj2-t_WB2-Framei->velocity*dt-0.5*g_w*dt*dt)-
+		    (IMU_preintegrator.getDeltaP()+IMU_preintegrator.getJPBiasa()*Framei->delta_bias_a+IMU_preintegrator.getJPBiasg()*Framei->delta_bias_g);
+
+	    Mat99 Cov = IMU_preintegrator.getCovPVPhi();
+	    
+	    Mat33 J_resPhi_phi_i = -IMU_preintegrator.JacobianRInv(res_phi2)*R_WBj2.transpose()*R_WB2;
+	    Mat33 J_resPhi_phi_j = IMU_preintegrator.JacobianRInv(res_phi2);
+	    Mat33 J_resPhi_bg = -IMU_preintegrator.JacobianRInv(res_phi2)*SO3::exp(-res_phi2).matrix()*
+		    IMU_preintegrator.JacobianR(IMU_preintegrator.getJRBiasg()*Framei->delta_bias_g)*IMU_preintegrator.getJRBiasg();
+
+	    Mat33 J_resV_phi_i = SO3::hat(R_WB2.transpose()*(Framej->velocity - Framei->velocity - g_w*dt));
+	    Mat33 J_resV_v_i = -R_WB2.transpose();
+	    Mat33 J_resV_v_j = R_WB2.transpose();
+	    Mat33 J_resV_ba = -IMU_preintegrator.getJVBiasa();
+	    Mat33 J_resV_bg = -IMU_preintegrator.getJVBiasg();
+
+	    Mat33 J_resP_p_i = -Mat33::Identity();	
+	    Mat33 J_resP_p_j = R_WB2.transpose()*R_WBj2;
+	    Mat33 J_resP_bg = -IMU_preintegrator.getJPBiasg();
+	    Mat33 J_resP_ba = -IMU_preintegrator.getJPBiasa();
+	    Mat33 J_resP_v_i = -R_WB2.transpose()*dt;
+	    Mat33 J_resP_phi_i = SO3::hat(R_WB2.transpose()*(t_WBj2 - t_WB2 - Framei->velocity*dt - 0.5*g_w*dt*dt));
+
+	    Mat915 J_imui = Mat915::Zero();//rho,phi,v,bias_g,bias_a;
+	    J_imui.block(0,0,3,3) = J_resP_p_i;
+	    J_imui.block(0,3,3,3) = J_resP_phi_i;
+	    J_imui.block(0,6,3,3) = J_resP_v_i;
+	    J_imui.block(0,9,3,3) = J_resP_bg;
+	    J_imui.block(0,12,3,3) = J_resP_ba;
+	    
+	    J_imui.block(3,3,3,3) = J_resPhi_phi_i;
+	    J_imui.block(3,9,3,3) = J_resPhi_bg;
+	    
+	    J_imui.block(6,3,3,3) = J_resV_phi_i;
+	    J_imui.block(6,6,3,3) = J_resV_v_i;
+	    J_imui.block(6,9,3,3) = J_resV_bg;
+	    J_imui.block(6,12,3,3) = J_resV_ba;
+	    
+	    Mat915 J_imuj = Mat915::Zero();
+	    J_imuj.block(0,0,3,3) = J_resP_p_j;
+	    J_imuj.block(3,3,3,3) = J_resPhi_phi_j;
+	    J_imuj.block(6,6,3,3)  = J_resV_v_j;
+
+	    Mat99 Weight = Mat99::Zero();
+	    Weight.block(0,0,3,3) = Cov.block(0,0,3,3);
+	    Weight.block(3,3,3,3) = Cov.block(6,6,3,3);
+	    Weight.block(6,6,3,3) = Cov.block(3,3,3,3);
+	    Mat99 Weight2 = Mat99::Zero();
+	    for(int i=0;i<9;++i){
+		Weight2(i,i) = Weight(i,i);
+	    }
+	    Weight = Weight2;
+	    Weight = imu_weight*imu_weight*Weight.inverse();
+
+	    Vec9 b_1 = Vec9::Zero();
+	    b_1.block(0,0,3,1) = res_p2;
+	    b_1.block(3,0,3,1) = res_phi2;
+	    b_1.block(6,0,3,1) = res_v2;
+	   
+	    Mat44 T_tempj = T_BC.matrix()*T_WD_l.matrix()*worldToCam_j.matrix();
+	    Mat1515 J_relj = Mat1515::Identity();
+	    J_relj.block(0,0,6,6) = (-1*Sim3(T_tempj).Adj()).block(0,0,6,6);
+	    Mat44 T_tempi = T_BC.matrix()*T_WD_l.matrix()*worldToCam_i.matrix();
+	    Mat1515 J_reli = Mat1515::Identity();
+	    J_reli.block(0,0,6,6) = (-1*Sim3(T_tempi).Adj()).block(0,0,6,6);
+	    
+	    Mat44 T_tempj_half = T_BC.matrix()*T_WD_l_half.matrix()*worldToCam_j.matrix();
+	    Mat1515 J_relj_half = Mat1515::Identity();
+	    J_relj_half.block(0,0,6,6) = (-1*Sim3(T_tempj_half).Adj()).block(0,0,6,6);
+	    Mat44 T_tempi_half = T_BC.matrix()*T_WD_l_half.matrix()*worldToCam_i.matrix();
+	    Mat1515 J_reli_half = Mat1515::Identity();
+	    J_reli_half.block(0,0,6,6) = (-1*Sim3(T_tempi_half).Adj()).block(0,0,6,6);
+	    
+	    Mat77 J_poseb_wd_i= Sim3(T_tempi).Adj()-Sim3(T_BC.matrix()*T_WD_l.matrix()).Adj();
+	    Mat77 J_poseb_wd_j= Sim3(T_tempj).Adj()-Sim3(T_BC.matrix()*T_WD_l.matrix()).Adj();
+	    Mat77 J_poseb_wd_i_half= Sim3(T_tempi_half).Adj()-Sim3(T_BC.matrix()*T_WD_l_half.matrix()).Adj();
+	    Mat77 J_poseb_wd_j_half= Sim3(T_tempj_half).Adj()-Sim3(T_BC.matrix()*T_WD_l_half.matrix()).Adj();
+	    J_poseb_wd_i.block(0,0,7,3) = Mat73::Zero();
+	    J_poseb_wd_j.block(0,0,7,3) = Mat73::Zero();
+	    J_poseb_wd_i_half.block(0,0,7,3) = Mat73::Zero();
+	    J_poseb_wd_j_half.block(0,0,7,3) = Mat73::Zero();
+	    
+	    Mat97 J_res_posebi = Mat97::Zero();
+	    J_res_posebi.block(0,0,9,6) = J_imui.block(0,0,9,6);
+	    Mat97 J_res_posebj = Mat97::Zero();
+	    J_res_posebj.block(0,0,9,6) = J_imuj.block(0,0,9,6);
+
+	    Mat66 J_xi_r_l_i = worldToCam_i.Adj().inverse();
+	    Mat66 J_xi_r_l_j = worldToCam_j.Adj().inverse();
+	    Mat1515 J_r_l_i = Mat1515::Identity();
+	    Mat1515 J_r_l_j = Mat1515::Identity();
+	    J_r_l_i.block(0,0,6,6) = J_xi_r_l_i;
+	    J_r_l_j.block(0,0,6,6) = J_xi_r_l_j;
+	    
+	    J_all.block(0,CPARS,9,7) += J_res_posebi*J_poseb_wd_i;
+	    J_all.block(0,CPARS,9,7) += J_res_posebj*J_poseb_wd_j;
+	    J_all.block(0,CPARS,9,3) = Mat93::Zero();
+	    
+	    J_all.block(0,CPARS+7+i*17,9,6) += J_imui.block(0,0,9,6)*J_reli.block(0,0,6,6)*J_xi_r_l_i;
+	    J_all.block(0,CPARS+7+(i+1)*17,9,6) += J_imuj.block(0,0,9,6)*J_relj.block(0,0,6,6)*J_xi_r_l_j;
+	    J_all.block(0,CPARS+7+i*17+8,9,9) += J_imui.block(0,6,9,9);
+	    J_all.block(0,CPARS+7+(i+1)*17+8,9,9) += J_imuj.block(0,6,9,9);
+	    
+	    J_all_half.block(0,CPARS,9,7) += J_res_posebi*J_poseb_wd_i_half;
+	    J_all_half.block(0,CPARS,9,7) += J_res_posebj*J_poseb_wd_j_half;
+	    J_all_half.block(0,CPARS,9,3) = Mat93::Zero();
+	    
+	    J_all_half.block(0,CPARS+7+i*17,9,6) += J_imui.block(0,0,9,6)*J_reli_half.block(0,0,6,6)*J_xi_r_l_i;
+	    J_all_half.block(0,CPARS+7+(i+1)*17,9,6) += J_imuj.block(0,0,9,6)*J_relj_half.block(0,0,6,6)*J_xi_r_l_j;
+	    J_all_half.block(0,CPARS+7+i*17+8,9,9) += J_imui.block(0,6,9,9);
+	    J_all_half.block(0,CPARS+7+(i+1)*17+8,9,9) += J_imuj.block(0,6,9,9);
+	    
+	    r_all.block(0,0,9,1) += b_1;
+	    
+	    HM_change += (J_all.transpose()*Weight*J_all);
+	    bM_change += (J_all.transpose()*Weight*r_all);
+	    
+	    HM_change_half = HM_change_half*setting_margWeightFac_imu;
+	    bM_change_half = bM_change_half*setting_margWeightFac_imu;
+	    
+	    MatXX J_all2 = MatXX::Zero(6, CPARS+7+nFrames*17);
+	    VecX r_all2 = VecX::Zero(6);
+	    r_all2.block(0,0,3,1) = Framej->bias_g+Framej->delta_bias_g - (Framei->bias_g+Framei->delta_bias_g);
+	    r_all2.block(3,0,3,1) = Framej->bias_a+Framej->delta_bias_a - (Framei->bias_a+Framei->delta_bias_a);
+	    
+	    J_all2.block(0,CPARS+7+i*17+8+3,3,3) = -Mat33::Identity();
+	    J_all2.block(0,CPARS+7+(i+1)*17+8+3,3,3) = Mat33::Identity();
+	    J_all2.block(3,CPARS+7+i*17+8+6,3,3) = -Mat33::Identity();
+	    J_all2.block(3,CPARS+7+(i+1)*17+8+6,3,3) = Mat33::Identity();
+	    Mat66 Cov_bias = Mat66::Zero();
+		Cov_bias.block(0,0,3,3) = IMU_Data->getGyrRandomWalkNoise()*dt;
+		Cov_bias.block(3,3,3,3) = IMU_Data->getAccRandomWalkNoise()*dt;
+	    Mat66 weight_bias = Mat66::Identity()*imu_weight*imu_weight*Cov_bias.inverse();
+	    HM_bias += (J_all2.transpose()*weight_bias*J_all2*setting_margWeightFac_imu);
+	    bM_bias += (J_all2.transpose()*weight_bias*r_all2*setting_margWeightFac_imu);
+	    
+	}
+	HM_change = HM_change*setting_margWeightFac_imu;
+	bM_change = bM_change*setting_margWeightFac_imu;
+	
+	HM_change_half = HM_change_half*setting_margWeightFac_imu;
+	bM_change_half = bM_change_half*setting_margWeightFac_imu;
+	
+	VecX StitchedDelta = getStitchedDeltaF();
+	VecX delta_b = VecX::Zero(CPARS+7+nFrames*17);
+
+	for(int i=fh->idx-1;i<fh->idx+1;i++){
+	    if(i<0)continue;
+	    double time_start = frames[i]->data->shell->timestamp;
+	    double time_end = frames[i+1]->data->shell->timestamp;
+	    double dt = time_end-time_start;
+	    
+	    if(dt>0.5)continue;
+	    if(i==fh->idx-1){
+		delta_b.block(CPARS+7+17*i,0,6,1) = StitchedDelta.block(CPARS+i*8,0,6,1);
+		frames[i]->m_flag = true;
+	    }
+	    if(i==fh->idx){
+	      delta_b.block(CPARS+7+17*(i+1),0,6,1) = StitchedDelta.block(CPARS+(i+1)*8,0,6,1);
+	      frames[i+1]->m_flag = true;
+	    }
+	}
+
+	delta_b.block(CPARS,0,7,1) = Sim3(T_WD_l.inverse()*T_WD).log();
+	
+	    
+	VecX delta_b_half = delta_b;
+	delta_b_half.block(CPARS,0,7,1) = Sim3(T_WD_l_half.inverse()*T_WD).log();
+	
+	bM_change -= HM_change*delta_b;
+	bM_change_half -= HM_change_half*delta_b_half;
+	
+	double s_now = T_WD.scale();
+	double di=1;
+	if(s_last>s_now){
+	    di = (s_last+0.001)/s_now;
+	}else{
+	    di = (s_now+0.001)/s_last;
+	}
+	s_last = s_now; 
+
+
+
+	if(di>d_now)d_now = di;
+	if(d_now>d_min) d_now = d_min;
+
+	if(di>d_half)d_half = di;
+	if(d_half>d_min) d_half = d_min;
+	
+	bool side = s_now>s_middle;
+	if(side!=side_last||M_num==0){
+	    HM_imu_half.block(CPARS+6,0,1,HM_imu_half.cols()) = MatXX::Zero(1,HM_imu_half.cols());
+	    HM_imu_half.block(0,CPARS+6,HM_imu_half.rows(),1) = MatXX::Zero(HM_imu_half.rows(),1);
+	    bM_imu_half[CPARS+6] = 0;
+	    
+	    HM_imu_half.setZero();
+	    bM_imu_half.setZero();
+	    d_half = di;
+	    if(d_half>d_min)d_half = d_min;
+	    
+	    iv->reset_Mnum();
+	    iv->set_TWDl_half_2_TWD();
+	}
+
+	iv->increment_Mnum();
+	side_last = side;
+	
+	HM_imu_half += HM_change_half;
+ 	bM_imu_half += bM_change_half;
+	
+	if((int)fh->idx != (int)frames.size()-1)
+	{
+		int io = fh->idx*17+CPARS+7;	// index of frame to move to end
+		int ntail = 17*(nFrames-fh->idx-1);
+		assert((io+17+ntail) == nFrames*17+CPARS+7);
+
+		Vec17 bTmp = bM_imu_half.segment<17>(io);
+		VecX tailTMP = bM_imu_half.tail(ntail);
+		bM_imu_half.segment(io,ntail) = tailTMP;
+		bM_imu_half.tail<17>() = bTmp;
+  
+		MatXX HtmpCol = HM_imu_half.block(0,io,odim,17);
+		MatXX rightColsTmp = HM_imu_half.rightCols(ntail);
+		HM_imu_half.block(0,io,odim,ntail) = rightColsTmp;
+		HM_imu_half.rightCols(17) = HtmpCol;
+
+		MatXX HtmpRow = HM_imu_half.block(io,0,17,odim);
+		MatXX botRowsTmp = HM_imu_half.bottomRows(ntail);
+		HM_imu_half.block(io,0,ntail,odim) = botRowsTmp;
+		HM_imu_half.bottomRows(17) = HtmpRow;
+	}
+	VecX SVec = (HM_imu_half.diagonal().cwiseAbs()+VecX::Constant(HM_imu_half.cols(), 10)).cwiseSqrt();
+	VecX SVecI = SVec.cwiseInverse();
+	
+	MatXX HMScaled = SVecI.asDiagonal() * HM_imu_half * SVecI.asDiagonal();
+	VecX bMScaled =  SVecI.asDiagonal() * bM_imu_half;
+	
+	Mat1717 hpi = HMScaled.bottomRightCorner<17,17>();
+	hpi = 0.5f*(hpi+hpi);
+	hpi = hpi.inverse();
+	hpi = 0.5f*(hpi+hpi);
+	if(std::isfinite(hpi(0,0))==false){
+	    hpi = Mat1717::Zero();
+	}
+	
+	MatXX bli = HMScaled.bottomLeftCorner(17,ndim).transpose() * hpi;
+	HMScaled.topLeftCorner(ndim,ndim).noalias() -= bli * HMScaled.bottomLeftCorner(17,ndim);
+	bMScaled.head(ndim).noalias() -= bli*bMScaled.tail<17>();
+
+	//unscale!
+	HMScaled = SVec.asDiagonal() * HMScaled * SVec.asDiagonal();
+	bMScaled = SVec.asDiagonal() * bMScaled;
+
+	// set.
+	HM_imu_half = 0.5*(HMScaled.topLeftCorner(ndim,ndim) + HMScaled.topLeftCorner(ndim,ndim).transpose());
+	bM_imu_half = bMScaled.head(ndim);
+	
+	//marginalize bias
+	{
+	if((int)fh->idx != (int)frames.size()-1)
+	{
+		int io = fh->idx*17+CPARS+7;	// index of frame to move to end
+		int ntail = 17*(nFrames-fh->idx-1);
+		assert((io+17+ntail) == nFrames*17+CPARS+7);
+
+		Vec17 bTmp = bM_bias.segment<17>(io);
+		VecX tailTMP = bM_bias.tail(ntail);
+		bM_bias.segment(io,ntail) = tailTMP;
+		bM_bias.tail<17>() = bTmp;
+
+		MatXX HtmpCol = HM_bias.block(0,io,odim,17);
+		MatXX rightColsTmp = HM_bias.rightCols(ntail);
+		HM_bias.block(0,io,odim,ntail) = rightColsTmp;
+		HM_bias.rightCols(17) = HtmpCol;
+
+		MatXX HtmpRow = HM_bias.block(io,0,17,odim);
+		MatXX botRowsTmp = HM_bias.bottomRows(ntail);
+		HM_bias.block(io,0,ntail,odim) = botRowsTmp;
+		HM_bias.bottomRows(17) = HtmpRow;
+	}
+	VecX SVec = (HM_bias.diagonal().cwiseAbs()+VecX::Constant(HM_bias.cols(), 10)).cwiseSqrt();
+	VecX SVecI = SVec.cwiseInverse();
+	
+	MatXX HMScaled = SVecI.asDiagonal() * HM_bias * SVecI.asDiagonal();
+	VecX bMScaled =  SVecI.asDiagonal() * bM_bias;
+	
+	Mat1717 hpi = HMScaled.bottomRightCorner<17,17>();
+	hpi = 0.5f*(hpi+hpi);
+	hpi = hpi.inverse();
+	hpi = 0.5f*(hpi+hpi);
+	if(std::isfinite(hpi(0,0))==false){
+	    hpi = Mat1717::Zero();
+	}
+	
+	MatXX bli = HMScaled.bottomLeftCorner(17,ndim).transpose() * hpi;
+	HMScaled.topLeftCorner(ndim,ndim).noalias() -= bli * HMScaled.bottomLeftCorner(17,ndim);
+	bMScaled.head(ndim).noalias() -= bli*bMScaled.tail<17>();
+
+	//unscale!
+	HMScaled = SVec.asDiagonal() * HMScaled * SVec.asDiagonal();
+	bMScaled = SVec.asDiagonal() * bMScaled;
+
+	// set.
+	HM_bias = 0.5*(HMScaled.topLeftCorner(ndim,ndim) + HMScaled.topLeftCorner(ndim,ndim).transpose());
+	bM_bias = bMScaled.head(ndim);
+	}
+	if(M_num2>25){
+	    use_Dmargin = false;
+	}
+	if(M_num2>25){
+	    use_Dmargin = false;
+	}
+
+	if((s_now>s_middle*d_now||s_now<s_middle/d_now)&&use_Dmargin){
+	    HM_imu = HM_imu_half;
+	    bM_imu = bM_imu_half;
+
+	    s_middle = s_now;
+
+	    iv->set_Mnum2_2_Mnum();
+	    HM_imu_half.setZero();
+	    bM_imu_half.setZero();
+	    HM_imu_half.block(CPARS+6,0,1,HM_imu_half.cols()) = MatXX::Zero(1,HM_imu_half.cols());
+	    HM_imu_half.block(0,CPARS+6,HM_imu_half.rows(),1) = MatXX::Zero(HM_imu_half.rows(),1);
+	    bM_imu_half[CPARS+6] = 0;
+
+	    d_half = di;
+	    if(d_half>d_min)d_half = d_min;
+	    iv->reset_Mnum();
+	    iv->set_TWDl_2_TWDl_half();
+	    iv->set_m_state_twd();
+	}
+	else{
+	    HM_imu += HM_change;
+	    bM_imu += bM_change;
+	    
+	    iv->increment_Mnum2();
+	    if((int)fh->idx != (int)frames.size()-1)
+	    {
+		    int io = fh->idx*17+CPARS+7;	// index of frame to move to end
+		    int ntail = 17*(nFrames-fh->idx-1);
+		    assert((io+17+ntail) == nFrames*17+CPARS+7);
+
+		    Vec17 bTmp = bM_imu.segment<17>(io);
+		    VecX tailTMP = bM_imu.tail(ntail);
+		    bM_imu.segment(io,ntail) = tailTMP;
+		    bM_imu.tail<17>() = bTmp;
+
+		    MatXX HtmpCol = HM_imu.block(0,io,odim,17);
+		    MatXX rightColsTmp = HM_imu.rightCols(ntail);
+		    HM_imu.block(0,io,odim,ntail) = rightColsTmp;
+		    HM_imu.rightCols(17) = HtmpCol;
+
+		    MatXX HtmpRow = HM_imu.block(io,0,17,odim);
+		    MatXX botRowsTmp = HM_imu.bottomRows(ntail);
+		    HM_imu.block(io,0,ntail,odim) = botRowsTmp;
+		    HM_imu.bottomRows(17) = HtmpRow;
+	    }
+	    VecX SVec = (HM_imu.diagonal().cwiseAbs()+VecX::Constant(HM_imu.cols(), 10)).cwiseSqrt();
+	    VecX SVecI = SVec.cwiseInverse();
+	    
+	    MatXX HMScaled = SVecI.asDiagonal() * HM_imu * SVecI.asDiagonal();
+	    VecX bMScaled =  SVecI.asDiagonal() * bM_imu;
+	    
+	    Mat1717 hpi = HMScaled.bottomRightCorner<17,17>();
+	    hpi = 0.5f*(hpi+hpi);
+	    hpi = hpi.inverse();
+	    hpi = 0.5f*(hpi+hpi);
+	    if(std::isfinite(hpi(0,0))==false){
+		hpi = Mat1717::Zero();
+	    }
+	    
+	    MatXX bli = HMScaled.bottomLeftCorner(17,ndim).transpose() * hpi;
+	    HMScaled.topLeftCorner(ndim,ndim).noalias() -= bli * HMScaled.bottomLeftCorner(17,ndim);
+	    bMScaled.head(ndim).noalias() -= bli*bMScaled.tail<17>();
+
+	    //unscale!
+	    HMScaled = SVec.asDiagonal() * HMScaled * SVec.asDiagonal();
+	    bMScaled = SVec.asDiagonal() * bMScaled;
+
+	    // set.
+	    HM_imu = 0.5*(HMScaled.topLeftCorner(ndim,ndim) + HMScaled.topLeftCorner(ndim,ndim).transpose());
+	    bM_imu = bMScaled.head(ndim);
+	}
+  
+}
+
+void EnergyFunctional::marginalizeFrame(EFFrame* fh, IMUVariables* iv)
 {
 
 	assert(EFDeltaValid);
@@ -506,6 +1233,10 @@ void EnergyFunctional::marginalizeFrame(EFFrame* fh)
 	assert(EFIndicesValid);
 
 	assert((int)fh->points.size()==0);
+	
+	if(imu_use_flag)
+	  marginalizeFrame_imu(fh, iv);
+	
 	int ndim = nFrames*8+CPARS-8;// new dimension
 	int odim = nFrames*8+CPARS;// old dimension
 
@@ -564,6 +1295,9 @@ void EnergyFunctional::marginalizeFrame(EFFrame* fh)
 	hpi = 0.5f*(hpi+hpi);
 	hpi = hpi.inverse();
 	hpi = 0.5f*(hpi+hpi);
+	if(std::isfinite(hpi(0,0))==false){
+	    hpi = Mat88::Zero();
+	}
 
 	// schur-complement!
 	MatXX bli = HMScaled.bottomLeftCorner(8,ndim).transpose() * hpi;
@@ -632,10 +1366,20 @@ void EnergyFunctional::marginalizePointsF()
 			if(p->stateFlag == EFPointStatus::PS_MARGINALIZE)
 			{
 				p->priorF *= setting_idepthFixPriorMargFac;
-				for(EFResidual* r : p->residualsAll)
-					if(r->isActive())
-                        connectivityMap[(((uint64_t)r->host->frameID) << 32) + ((uint64_t)r->target->frameID)][1]++;
-				allPointsToMarg.push_back(p);
+				int ngoodres = 0;
+				for(EFResidual* r : p->residualsAll){
+					if(r->isActive()){
+						connectivityMap[(((uint64_t)r->host->frameID) << 32) + ((uint64_t)r->target->frameID)][1]++;
+						ngoodres++;
+					}
+				}
+
+				if(ngoodres > 0){
+					allPointsToMarg.push_back(p);
+				}
+				else{
+					removePoint(p);
+				}
 			}
 		}
 	}
@@ -778,7 +1522,7 @@ void EnergyFunctional::orthogonalize(VecX* b, MatXX* H)
 }
 
 
-void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* HCalib)
+void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* HCalib, IMUVariables* iv)
 {
 	if(setting_solverMode & SOLVER_USE_GN) lambda=0;
 	if(setting_solverMode & SOLVER_FIX_LAMBDA) lambda = 1e-5;
@@ -802,11 +1546,27 @@ void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* 
 
 
 	bM_top = (bM+ HM * getStitchedDeltaF());
+	
+	VecX StitchedDelta = getStitchedDeltaF();
+	VecX StitchedDelta2 = VecX::Zero(CPARS+7+nFrames*17);
+// 	StitchedDelta2.block(0,0,CPARS,1) = StitchedDelta.block(0,0,CPARS,1);
+	for(int i=0;i<nFrames;++i){
+	    if(frames[i]->m_flag){
+		StitchedDelta2.block(CPARS+7+17*i,0,6,1) = StitchedDelta.block(CPARS+8*i,0,6,1);
+	    }
+	}
 
+	MatXX H_imu;
+	VecX b_imu;
+	VecX bM_top_imu;
 
+	if(imu_use_flag){
+		StitchedDelta2.block(CPARS,0,7,1) = (iv->m_state_twd);
+		
+		bM_top_imu = (bM_imu + HM_imu*StitchedDelta2); 
 
-
-
+		getIMUHessian(H_imu, b_imu, iv);
+	}
 
 
 	MatXX HFinal_top;
@@ -854,13 +1614,79 @@ void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* 
 		for(int i=0;i<8*nFrames+CPARS;i++) HFinal_top(i,i) *= (1+lambda);
 		HFinal_top -= H_sc * (1.0f/(1+lambda));
 	}
-
-
-
-
-
-
+	
+// 	HFinal_top = MatXX::Zero(CPARS+8*nFrames,CPARS+8*nFrames);
+// 	bFinal_top = VecX::Zero(CPARS+8*nFrames);
+	MatXX HFinal_top2;
+	VecX bFinal_top2;
 	VecX x;
+	VecX x2;
+	VecX x3;
+
+	if(imu_use_flag){
+		H_imu.block(3,3,3,3) += setting_initialIMUHessian * Mat33::Identity();
+		H_imu(6,6) += setting_initialScaleHessian;
+		for(int i=0;i<nFrames;++i){
+			H_imu.block(7+15*i+9,7+15*i+9,3,3) += setting_initialbgHessian * Mat33::Identity();
+			H_imu.block(7+15*i+12,7+15*i+12,3,3) += setting_initialbaHessian * Mat33::Identity();
+		}
+		for(int i=0;i<7+15*nFrames;i++)H_imu(i,i)*= (1+lambda);
+
+		//imu_term
+		HFinal_top2 = MatXX::Zero(CPARS+7+17*nFrames,CPARS+7+17*nFrames);//Cam,Twd,pose,a,b,v,bg,ba
+		bFinal_top2 = VecX::Zero(CPARS+7+17*nFrames);
+		HFinal_top2.block(0,0,CPARS,CPARS) = HFinal_top.block(0,0,CPARS,CPARS);
+		HFinal_top2.block(CPARS,CPARS,7,7) = H_imu.block(0,0,7,7);
+		bFinal_top2.block(0,0,CPARS,1) = bFinal_top.block(0,0,CPARS,1);
+		bFinal_top2.block(CPARS,0,7,1) = b_imu.block(0,0,7,1);
+		for(int i=0;i<nFrames;++i){
+			//cam
+			HFinal_top2.block(0,CPARS+7+i*17,CPARS,8) += HFinal_top.block(0,CPARS+i*8,CPARS,8);
+			HFinal_top2.block(CPARS+7+i*17,0,8,CPARS) += HFinal_top.block(CPARS+i*8,0,8,CPARS);
+			//Twd
+			HFinal_top2.block(CPARS,CPARS+7+i*17,7,6) += H_imu.block(0,7+i*15,7,6);
+			HFinal_top2.block(CPARS+7+i*17,CPARS,6,7) += H_imu.block(7+i*15,0,6,7);
+			HFinal_top2.block(CPARS,CPARS+7+i*17+8,7,9) += H_imu.block(0,7+i*15+6,7,9);
+			HFinal_top2.block(CPARS+7+i*17+8,CPARS,9,7) += H_imu.block(7+i*15+6,0,9,7);
+			//pose a b
+			HFinal_top2.block(CPARS+7+i*17,CPARS+7+i*17,8,8) += HFinal_top.block(CPARS+i*8,CPARS+i*8,8,8);
+			//pose
+			HFinal_top2.block(CPARS+7+i*17,CPARS+7+i*17,6,6) += H_imu.block(7+i*15,7+i*15,6,6);
+			//v bg ba
+			HFinal_top2.block(CPARS+7+i*17+8,CPARS+7+i*17+8,9,9) += H_imu.block(7+i*15+6,7+i*15+6,9,9);
+			//v bg ba,pose
+			HFinal_top2.block(CPARS+7+i*17+8,CPARS+7+i*17,9,6) += H_imu.block(7+i*15+6,7+i*15,9,6);
+			//pose,v bg ba
+			HFinal_top2.block(CPARS+7+i*17,CPARS+7+i*17+8,6,9) += H_imu.block(7+i*15,7+i*15+6,6,9);
+			
+			for(int j=i+1;j<nFrames;++j){
+			//pose a b
+			HFinal_top2.block(CPARS+7+i*17,CPARS+7+j*17,8,8) += HFinal_top.block(CPARS+i*8,CPARS+j*8,8,8);
+			HFinal_top2.block(CPARS+7+j*17,CPARS+7+i*17,8,8) += HFinal_top.block(CPARS+j*8,CPARS+i*8,8,8);
+			//pose
+			HFinal_top2.block(CPARS+7+i*17,CPARS+7+j*17,6,6) += H_imu.block(7+i*15,7+j*15,6,6);
+			HFinal_top2.block(CPARS+7+j*17,CPARS+7+i*17,6,6) += H_imu.block(7+j*15,7+i*15,6,6);
+			//v bg ba
+			HFinal_top2.block(CPARS+7+i*17+8,CPARS+7+j*17+8,9,9) += H_imu.block(7+i*15+6,7+j*15+6,9,9);
+			HFinal_top2.block(CPARS+7+j*17+8,CPARS+7+i*17+8,9,9) += H_imu.block(7+j*15+6,7+i*15+6,9,9);
+			//v bg ba,pose
+			HFinal_top2.block(CPARS+7+i*17+8,CPARS+7+j*17,9,6) += H_imu.block(7+i*15+6,7+j*15,9,6);
+			HFinal_top2.block(CPARS+7+j*17,CPARS+7+i*17+8,6,9) += H_imu.block(7+j*15,7+i*15+6,6,9);
+			//pose,v bg ba
+			HFinal_top2.block(CPARS+7+i*17,CPARS+7+j*17+8,6,9) += H_imu.block(7+i*15,7+j*15+6,6,9);
+			HFinal_top2.block(CPARS+7+j*17+8,CPARS+7+i*17,9,6) += H_imu.block(7+j*15+6,7+i*15,9,6);		
+			}
+			bFinal_top2.block(CPARS+7+17*i,0,8,1) += bFinal_top.block(CPARS+8*i,0,8,1);
+			bFinal_top2.block(CPARS+7+17*i,0,6,1) += b_imu.block(7+15*i,0,6,1);
+			bFinal_top2.block(CPARS+7+17*i+8,0,9,1) += b_imu.block(7+15*i+6,0,9,1);
+		}
+		HFinal_top2 += (HM_imu + HM_bias);
+		bFinal_top2 += (bM_top_imu + bM_bias);
+		VecX x = VecX::Zero(CPARS+8*nFrames);
+		VecX x2= VecX::Zero(CPARS+7+17*nFrames);
+		VecX x3= VecX::Zero(CPARS+7+17*nFrames);
+	}
+
 	if(setting_solverMode & SOLVER_SVD)
 	{
 		VecX SVecI = HFinal_top.diagonal().cwiseSqrt().cwiseInverse();
@@ -893,9 +1719,23 @@ void EnergyFunctional::solveSystemF(int iteration, double lambda, CalibHessian* 
 	}
 	else
 	{
-		VecX SVecI = (HFinal_top.diagonal()+VecX::Constant(HFinal_top.cols(), 10)).cwiseSqrt().cwiseInverse();
-		MatXX HFinalScaled = SVecI.asDiagonal() * HFinal_top * SVecI.asDiagonal();
-		x = SVecI.asDiagonal() * HFinalScaled.ldlt().solve(SVecI.asDiagonal() * bFinal_top);//  SVec.asDiagonal() * svd.matrixV() * Ub;
+		if(imu_use_flag){
+			VecX SVecI = (HFinal_top2.diagonal()+VecX::Constant(HFinal_top2.cols(), 10)).cwiseSqrt().cwiseInverse();
+		    MatXX HFinalScaled = SVecI.asDiagonal() * HFinal_top2 * SVecI.asDiagonal();
+		    x2 = SVecI.asDiagonal() * HFinalScaled.ldlt().solve(SVecI.asDiagonal() * bFinal_top2);//  SVec.asDiagonal() * svd.matrixV() * Ub;
+		    x.block(0,0,CPARS,1) = x2.block(0,0,CPARS,1);
+
+		    for(int i=0;i<nFrames;++i){
+				x.block(CPARS+i*8,0,8,1) = x2.block(CPARS+7+17*i,0,8,1);
+				frames[i]->data->step_imu = -x2.block(CPARS+7+17*i+8,0,9,1);
+		    }
+		    (iv->m_step_twd) = -x2.block(CPARS,0,7,1);
+		}
+		else{
+		    VecX SVecI = (HFinal_top.diagonal()+VecX::Constant(HFinal_top.cols(), 10)).cwiseSqrt().cwiseInverse();
+		    MatXX HFinalScaled = SVecI.asDiagonal() * HFinal_top * SVecI.asDiagonal();
+		    x = SVecI.asDiagonal() * HFinalScaled.ldlt().solve(SVecI.asDiagonal() * bFinal_top);//  SVec.asDiagonal() * svd.matrixV() * Ub;
+		}
 	}
 
 

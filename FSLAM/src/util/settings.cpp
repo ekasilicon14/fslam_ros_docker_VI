@@ -237,11 +237,15 @@ int sparsityFactor = 5;	// not actually a setting, only some legacy stuff for co
 
 
 // IMU Parameters
+double baseline = 0;
 double imu_weight = 0;
 double imu_weight_tracker = 0;
 bool imu_use_flag = false;
 bool imu_track_flag = false;
 double setting_margWeightFac_imu = 1;
+double G_norm = 9.81;
+bool use_Dmargin = false;
+double d_min = 1.04880884817 ; // sqrt(1.1)
 
 
 void handleKey(char k)

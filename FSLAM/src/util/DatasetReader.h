@@ -569,17 +569,17 @@ private:
 };
 
 
-class IMUFolderReader
+class IMUData
 {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
-	IMUFolderReader(std::string path, std::string calibFile){
+	IMUData(std::string path, std::string calibFile){
 		this->path = path;
 		this->calibfile = calibFile;
 	}
 
-	~IMUFolderReader(){}
+	~IMUData(){}
 
 	void getIMUfiles_euroc(){
 		std::ifstream inf;
@@ -663,6 +663,30 @@ public:
 
 	double get_timestampdata(int i){
 		return imu_time_stamp[i];
+	}
+
+	int get_timesize(){
+		return imu_time_stamp.size();
+	}
+
+	Mat33 getGyrCov(){
+		return GyrCov;
+	}
+
+	Mat33 getAccCov(){
+		return AccCov;
+	}
+
+	Mat33 getGyrRandomWalkNoise(){
+		return GyrRandomWalkNoise;
+	}
+
+	Mat33 getAccRandomWalkNoise(){
+		return AccRandomWalkNoise;
+	}
+
+	SE3 getT_BC(){
+		return T_BC;
 	}
 
 private:

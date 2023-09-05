@@ -44,6 +44,9 @@
 #include <algorithm>
 #include "Indirect/MapPoint.h"
 #include "Indirect/Frame.h"
+
+#include "FullSystem/IMUPreintegrator.h"
+
 namespace HSLAM
 {
 
