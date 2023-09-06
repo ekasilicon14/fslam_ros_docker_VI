@@ -941,7 +941,7 @@ void FullSystem::flagPointsForRemoval()
 }
 
 
-void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
+void FullSystem::addActiveFrame( ImageAndExposure* image, int id , IMUVariables* vi)
 {
 
     if(isLost) return;
@@ -965,13 +965,19 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
     shell->timestamp = image->timestamp;
     shell->incoming_id = id;
 	fh->shell = shell;
-	allFrameHistory.push_back(shell);
 
 
 	// =========================== make Images / derivatives etc. =========================
 	fh->ab_exposure = image->exposure_time;
     fh->makeImages(image->image, &Hcalib);
 
+	if(allFrameHistory.size()>0){
+	    fh->velocity = fh->shell->velocity = allFrameHistory.back()->velocity;
+	    fh->bias_g = fh->shell->bias_g = allFrameHistory.back()->bias_g + allFrameHistory.back()->delta_bias_g;
+	    fh->bias_a = fh->shell->bias_a = allFrameHistory.back()->bias_a + allFrameHistory.back()->delta_bias_a;
+	}
+	
+	allFrameHistory.push_back(shell);
 
 
 	if(!initialized)
@@ -981,6 +987,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		{
 
 			coarseInitializer->setFirst(&Hcalib, fh);
+			if(imu_use_flag) initFirstFrame_imu(fh, vi);
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
@@ -1108,6 +1115,58 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		return;
 	}
 }
+
+void FullSystem::initFirstFrame_imu(FrameHessian* fh, IMUVariables* vi){
+	int index;
+
+	if((IMU_Data->get_timesize())>0){
+	    for(int i=0;i<(IMU_Data->get_timesize());++i){
+			if((IMU_Data->get_timestampdata(i))>=fh->shell->timestamp||fabs((IMU_Data->get_timestampdata(i))-fh->shell->timestamp)<0.001){
+				index = i;
+				break;					  				
+			}
+	    }
+	}
+
+	Vec3 g_b = Vec3::Zero();
+	Vec3 g_w;
+	g_w<<0,0,-1;
+
+	for(int j=0;j<40;j++){
+	    g_b = g_b + (IMU_Data->get_acceldata(index-j));
+	}
+
+	double norm = g_b.norm();
+	g_b = -g_b/norm;
+	SE3 T_BC = IMU_Data->getT_BC();
+
+	Vec3 g_c = T_BC.inverse().rotationMatrix()*g_b;
+
+	norm = g_c.norm();
+	g_c = g_c/norm;
+	Vec3 n = Sophus::SO3::hat(g_c)*g_w;
+
+	norm = n.norm();
+	n = n/norm;
+	double sin_theta = norm;
+	double cos_theta = g_c.dot(g_w);
+
+	Mat33 R_wc = cos_theta*Mat33::Identity()+(1-cos_theta)*n*n.transpose()+sin_theta*Sophus::SO3::hat(n);
+
+	SE3 T_wc(R_wc,Vec3::Zero());
+	
+// 	LOG(INFO)<<"first pose: \n"<<T_wc.matrix();
+	fh->shell->camToWorld = T_wc;
+	fh->setEvalPT_scaled(fh->shell->camToWorld.inverse(),fh->shell->aff_g2l);
+
+	Mat33 R_wd = Mat33::Identity();
+
+	(vi->m_T_WD) = Sim3(RxSO3(1,R_wd),Vec3::Zero());
+	vi->set_TWDl_2_TWD();
+	vi->set_TWDl_half_2_TWD();
+	vi->reset_state_twd();
+}
+
 void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 {
 

@@ -33,7 +33,7 @@ namespace HSLAM
 typedef Sophus::SE3d SE3;
 typedef Sophus::Sim3d Sim3;
 typedef Sophus::SO3d SO3;
-
+typedef Sophus::RxSO3d RxSO3;
 
 
 #define CPARS 4

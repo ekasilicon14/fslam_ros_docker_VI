@@ -123,7 +123,7 @@ public:
 	virtual ~FullSystem();
 
 	// adds a new frame, and creates point & residual structs.
-	void addActiveFrame(ImageAndExposure* image, int id);
+	void addActiveFrame(ImageAndExposure* image, int id, IMUVariables* vi = nullptr);
 
 	// marginalizes a frame. drops / marginalizes points & residuals.
 	void marginalizeFrame(FrameHessian* frame);
@@ -153,7 +153,7 @@ public:
 
 	boost::mutex mapMutex;
 
-	void initFirstFrame_imu(FrameHessian* fh);
+	void initFirstFrame_imu(FrameHessian* fh, IMUVariables* vi);
 
 	CalibHessian Hcalib;
 	std::shared_ptr<Matcher> matcher;
