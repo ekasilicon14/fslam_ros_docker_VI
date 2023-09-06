@@ -33,6 +33,32 @@ ImmaturePoint::ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, Ca
 
 	idepth_GT=0;
 	quality=10000;
+}
+
+ImmaturePoint::ImmaturePoint(float u_, float v_, FrameHessian* host_, CalibHessian* HCalib)
+        : u(u_), v(v_), host(host_), idepth_min(0), idepth_max(NAN), lastTraceStatus(IPS_UNINITIALIZED)
+{
+    gradH.setZero();  //Mat22f gradH
+
+    for(int idx=0;idx<patternNum;idx++)
+    {
+        int dx = patternP[idx][0];
+        int dy = patternP[idx][1];
+
+        Vec3f ptc = getInterpolatedElement33BiLin(host->dI, u+dx, v+dy,wG[0]);
+
+        color[idx] = ptc[0];
+        if(!std::isfinite(color[idx])) {energyTH=NAN; return;}
+
+        gradH += ptc.tail<2>()  * ptc.tail<2>().transpose();
+
+        weights[idx] = sqrtf(setting_outlierTHSumComponent / (setting_outlierTHSumComponent + ptc.tail<2>().squaredNorm()));
+    }
+
+    energyTH = patternNum*setting_outlierTH;
+    energyTH *= setting_overallEnergyTHWeight*setting_overallEnergyTHWeight;
+
+    quality=10000;
 
 }
 

@@ -35,10 +35,9 @@
 #include "util/ImageAndExposure.h"
 
 #include "Indirect/IndirectTracker.h"
+#include "util/DatasetReader.h"
 
 #include <cmath>
-
-#include "FullSystem/IMUPreintegrator.h"
 
 namespace HSLAM
 {
@@ -122,6 +121,12 @@ FullSystem::FullSystem()
 	coarseInitializer = new CoarseInitializer(wG[0], hG[0]);
 	pixelSelector = new PixelSelector(wG[0], hG[0]);
 
+	if(imu_use_flag){
+		vi = new IMUVariables();
+		vi->set_T_BC(IMU_Data->getT_BC());
+		coarseTracker->setIMUData_Pointer(IMU_Data);
+	}
+
 	detector = std::make_shared<FeatureDetector>();
 	globalMap = std::make_shared<Map>();
 	matcher = std::make_shared<Matcher>();
@@ -145,8 +150,11 @@ FullSystem::FullSystem()
 	currentMinActDist=2;
 	initialized=false;
 
-
 	ef = new EnergyFunctional();
+	if(imu_use_flag){
+		ef->setIMUData_Pointer(IMU_Data);
+	}
+
 	ef->red = &this->treadReduce;
 
 	isLost=false;
@@ -208,6 +216,11 @@ FullSystem::~FullSystem()
 	delete coarseInitializer;
 	delete pixelSelector;
 	delete ef;
+
+	if(imu_use_flag){
+		delete vi;
+	}
+	
 	loopCloser.reset();
 	matcher.reset();
 	detector.reset();
@@ -2429,6 +2442,10 @@ void FullSystem::BAatExit()
 	BundleAdjustment(allKFrames, allMapPoints, 10, &stopGBA, true, true, currMaxKF, currMaxKF - 15, currMaxMp);
 	for (auto it : allKeyFramesHistory)
 	    it->setRefresh(true);
+}
+
+void FullSystem::setIMUData(IMUData* _IMU_Data){
+	IMU_Data = _IMU_Data;
 }
 
 

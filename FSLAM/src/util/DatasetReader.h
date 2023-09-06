@@ -393,6 +393,11 @@ class IMUData
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 
+	IMUData(){
+		this->path = "";
+		this->calibfile = "";
+	}
+
 	IMUData(std::string path, std::string calibFile){
 		this->path = path;
 		this->calibfile = calibFile;

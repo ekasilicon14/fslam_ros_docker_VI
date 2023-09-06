@@ -20,7 +20,7 @@ IMUPreintegrator::IMUPreintegrator(const IMUPreintegrator& pre):
 
 }  
 
-IMUPreintegrator::IMUPreintegrator(const Mat33& _GyrCov, const Mat33& _AccCov)
+IMUPreintegrator::IMUPreintegrator()
 {
     // delta measurements, position/velocity/rotation(matrix)
     _delta_P.setZero();    // P_k+1 = P_k + V_k*dt + R_k*a_k*dt*dt/2
@@ -39,8 +39,6 @@ IMUPreintegrator::IMUPreintegrator(const Mat33& _GyrCov, const Mat33& _AccCov)
 
     _delta_time = 0;
 
-    GyrCov = _GyrCov;
-	AccCov = _AccCov;
 }
 
 void IMUPreintegrator::reset()

@@ -61,7 +61,8 @@ void EnergyFunctional::getIMUHessian(MatXX &H, VecX &b, IMUVariables* iv){
 		//preintegrate
 		Mat33 temp_GyrCov = IMU_Data->getGyrCov();
 		Mat33 temp_AccCov = IMU_Data->getAccCov();
-		IMUPreintegrator IMU_preintegrator(temp_GyrCov, temp_AccCov);
+		IMUPreintegrator IMU_preintegrator;
+		IMU_preintegrator.setCov(temp_GyrCov, temp_AccCov);
 		IMU_preintegrator.reset();
 		double time_start = frames[i]->data->shell->timestamp;
 		double time_end = frames[i+1]->data->shell->timestamp;
@@ -780,7 +781,8 @@ void EnergyFunctional::marginalizeFrame_imu(EFFrame* fh, IMUVariables* iv){
 	    VecX r_all = VecX::Zero(9);
 	    Mat33 temp_GyrCov = IMU_Data->getGyrCov();
 		Mat33 temp_AccCov = IMU_Data->getAccCov();
-		IMUPreintegrator IMU_preintegrator(temp_GyrCov, temp_AccCov);
+		IMUPreintegrator IMU_preintegrator;
+		IMU_preintegrator.setCov(temp_GyrCov, temp_AccCov);
 	    IMU_preintegrator.reset();
 	    double time_start = frames[i]->data->shell->timestamp;
 	    double time_end = frames[i+1]->data->shell->timestamp;
@@ -1783,6 +1785,10 @@ VecX EnergyFunctional::getStitchedDeltaF() const
 	VecX d = VecX(CPARS+nFrames*8); d.head<CPARS>() = cDeltaF.cast<double>();
 	for(int h=0;h<nFrames;h++) d.segment<8>(CPARS+8*h) = frames[h]->delta;
 	return d;
+}
+
+void EnergyFunctional::setIMUData_Pointer(IMUData* _IMU_Data){
+	IMU_Data = _IMU_Data;
 }
 
 

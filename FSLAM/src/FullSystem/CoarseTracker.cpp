@@ -26,6 +26,104 @@ T* allocAligned(int size, std::vector<T*> &rawPtrVec)
     return alignedPtr;
 }
 
+double CoarseTracker::calcIMUResAndGS(Mat66 &H_out, Vec6 &b_out, SE3 &refToNew, const IMUPreintegrator &IMU_preintegrator, Vec9 &res_PVPhi, double PointEnergy, double imu_track_weight, IMUVariables* vi)
+{
+	Sim3 T_WD = (vi->m_T_WD);
+	SE3 T_BC = IMU_Data->getT_BC();
+
+    Mat44 M_DCi = lastRef->shell->camToWorld.matrix();
+    Mat44 M_WD = T_WD.matrix();
+    Mat44 M_WB = M_WD*M_DCi*M_WD.inverse()*T_BC.inverse().matrix();
+    SE3 T_WB(M_WB);
+    Mat33 R_WB = T_WB.rotationMatrix();
+    Vec3 t_WB = T_WB.translation();
+    
+    SE3 newToRef = refToNew.inverse();    
+    Mat44 M_DCj = (lastRef->shell->camToWorld * newToRef).matrix();
+    Mat44 M_WBj = M_WD*M_DCj*M_WD.inverse()*T_BC.inverse().matrix();
+    SE3 T_WBj(M_WBj);
+    Mat33 R_WBj = T_WBj.rotationMatrix();
+    Vec3 t_WBj = T_WBj.translation();
+    
+    double dt = IMU_preintegrator.getDeltaTime();
+    H_out = Mat66::Zero();
+    b_out = Vec6::Zero();
+    if(dt>0.5){
+	return 0;
+    }
+    Vec3 g_w;
+    g_w << 0,0,-1;
+    g_w = g_w*G_norm;
+    
+  
+    Vec3 so3 = IMU_preintegrator.getJRBiasg()*lastRef->delta_bias_g;
+    double theta = so3.norm();
+    Mat33 R_temp = Mat33::Identity(); 
+    R_temp = SO3::exp(IMU_preintegrator.getJRBiasg()*lastRef->delta_bias_g).matrix();
+    
+    Mat33 res_R = (IMU_preintegrator.getDeltaR()*R_temp).transpose()*R_WB.transpose()*R_WBj;
+    
+    Vec3 res_phi = SO3(res_R).log();
+
+	newFrame->velocity = R_WB*(R_WB.transpose()*(lastRef->velocity+g_w*dt)+
+		 (IMU_preintegrator.getDeltaV()+IMU_preintegrator.getJVBiasa()*lastRef->delta_bias_a+IMU_preintegrator.getJVBiasg()*lastRef->delta_bias_g));
+
+	newFrame->shell->velocity = newFrame->velocity;
+	
+    Vec3 res_p = R_WB.transpose()*(t_WBj-t_WB-lastRef->velocity*dt-0.5*g_w*dt*dt)-
+		 (IMU_preintegrator.getDeltaP()+IMU_preintegrator.getJPBiasa()*lastRef->delta_bias_a+IMU_preintegrator.getJPBiasg()*lastRef->delta_bias_g);
+	
+    Mat99 Cov = IMU_preintegrator.getCovPVPhi();
+
+    res_PVPhi.block(0,0,3,1) = res_p;
+    res_PVPhi.block(3,0,3,1) = Vec3::Zero();
+    res_PVPhi.block(6,0,3,1) = res_phi;
+    
+    double res = imu_track_weight*imu_track_weight*res_PVPhi.transpose() * Cov.inverse() * res_PVPhi;
+    
+    Mat33 J_resPhi_phi_j = IMU_preintegrator.JacobianRInv(res_phi);
+    Mat33 J_resV_v_j = R_WB.transpose();
+    Mat33 J_resP_p_j = R_WB.transpose()*R_WBj;
+
+    
+    Mat66 J_imu1 = Mat66::Zero();
+    J_imu1.block(0,0,3,3) = J_resP_p_j;
+    J_imu1.block(3,3,3,3) = J_resPhi_phi_j;
+    Mat66 Weight = Mat66::Zero();
+    Weight.block(0,0,3,3) = Cov.block(0,0,3,3);
+    Weight.block(3,3,3,3) = Cov.block(6,6,3,3);
+    Mat66 Weight2 = Mat66::Zero();
+    for(int i=0;i<6;++i){
+	Weight2(i,i) = Weight(i,i);
+    }
+    Weight = Weight2.inverse();
+    Weight *=(imu_track_weight*imu_track_weight);
+
+    Vec6 b_1 = Vec6::Zero();
+    b_1.block(0,0,3,1) = res_p;
+    b_1.block(3,0,3,1) = res_phi;
+    
+    Mat44 T_temp = T_BC.matrix()*T_WD.matrix()*M_DCj.inverse();
+    Mat66 J_rel = (-1*Sim3(T_temp).Adj()).block(0,0,6,6);
+    Mat66 J_xi_tw_th = SE3(M_DCi).Adj();
+
+    Mat66 J_xi_r_l = refToNew.Adj().inverse();
+    Mat66 J_2 = Mat66::Zero();
+    J_2 = J_imu1*J_rel*J_xi_tw_th*J_xi_r_l;
+
+    H_out = J_2.transpose()*Weight*J_2;
+    b_out = J_2.transpose()*Weight*b_1;
+    
+    H_out.block<6,3>(0,0) *= SCALE_XI_TRANS;
+    H_out.block<6,3>(0,3) *= SCALE_XI_ROT;
+    H_out.block<3,6>(0,0) *= SCALE_XI_TRANS;
+    H_out.block<3,6>(3,0) *= SCALE_XI_ROT;
+    
+    b_out.segment<3>(0) *= SCALE_XI_TRANS;
+    b_out.segment<3>(3) *= SCALE_XI_ROT;
+
+    return res;
+}
 
 CoarseTracker::CoarseTracker(int ww, int hh) : lastRef_aff_g2l(0,0)
 {
@@ -509,7 +607,8 @@ bool CoarseTracker::trackNewestCoarse(
 		SE3 &lastToNew_out, AffLight &aff_g2l_out,
 		int coarsestLvl,
 		Vec5 minResForAbort,
-		IOWrap::Output3DWrapper* wrap)
+		IOWrap::Output3DWrapper* wrap,
+		IMUVariables* vi)
 {
 	debugPlot = setting_render_displayCoarseTrackingFull;
 	debugPrint = false;
@@ -529,6 +628,47 @@ bool CoarseTracker::trackNewestCoarse(
 
 	bool haveRepeated = false;
 
+	IMUPreintegrator IMU_preintegrator;
+
+	std::vector<double> imu_track_w(coarsestLvl,0);
+
+	if(imu_use_flag){
+		Mat33 temp_GyrCov = IMU_Data->getGyrCov();
+		Mat33 temp_AccCov = IMU_Data->getAccCov();
+
+		IMU_preintegrator.setCov(temp_GyrCov, temp_AccCov);
+
+		double time_start = lastRef->shell->timestamp;
+		double time_end = newFrame->shell->timestamp;
+		
+		int index;
+		for(int i=0;i<IMU_Data->get_timesize();++i){
+			if(IMU_Data->get_timestampdata(i)>time_start||fabs(time_start-IMU_Data->get_timestampdata(i))<0.001){
+			index = i;
+			break;
+			}
+		}
+		
+		while(1){
+			double delta_t; 
+			if(IMU_Data->get_timestampdata(index+1)<time_end)
+				delta_t = IMU_Data->get_timestampdata(index+1)-IMU_Data->get_timestampdata(index);
+			else{
+				delta_t = time_end - IMU_Data->get_timestampdata(index);
+				if(delta_t<0.000001)break;
+			}
+			IMU_preintegrator.update(IMU_Data->get_gyrodata(index)-lastRef->bias_g, IMU_Data->get_acceldata(index)-lastRef->bias_a, delta_t);
+			if(IMU_Data->get_timestampdata(index+1)>=time_end)
+			break;
+			index++;
+		}
+		
+		imu_track_w[0] = imu_weight_tracker;
+		imu_track_w[1] = imu_track_w[0]/1.2;
+		imu_track_w[2] = imu_track_w[1]/1.5;
+		imu_track_w[3] = imu_track_w[2]/2;
+		imu_track_w[4] = imu_track_w[3]/3;
+	}
 
 	for(int lvl=coarsestLvl; lvl>=0; lvl--)
 	{
@@ -545,6 +685,13 @@ bool CoarseTracker::trackNewestCoarse(
 		}
 
 		calcGSSSE(lvl, H, b, refToNew_current, aff_g2l_current);
+		Mat66 H_imu;
+		Vec6 b_imu;
+		Vec9 res_PVPhi;
+		double res_imu_old = 0;
+		if(lvl<=0 && imu_use_flag){
+		    res_imu_old = calcIMUResAndGS(H_imu, b_imu, refToNew_current, IMU_preintegrator,res_PVPhi,resOld[0],imu_track_w[lvl], vi);
+		}
 
 		float lambda = 0.01;
 
@@ -565,6 +712,14 @@ bool CoarseTracker::trackNewestCoarse(
 		for(int iteration=0; iteration < maxIterations[lvl]; iteration++)
 		{
 			Mat88 Hl = H;
+
+			if(imu_use_flag){
+				if((vi->imu_track_ready) && lvl<=0){
+					Hl.block(0,0,6,6) = Hl.block(0,0,6,6) + H_imu;
+					b.block(0,0,6,1) = b.block(0,0,6,1) + b_imu.block(0,0,6,1);
+				}
+			}
+			
 			for(int i=0;i<8;i++) Hl(i,i) *= (1+lambda);
 			Vec8 inc = Hl.ldlt().solve(-b);
 
@@ -613,8 +768,17 @@ bool CoarseTracker::trackNewestCoarse(
 			aff_g2l_new.b += incScaled[7];
 
 			Vec6 resNew = calcRes(lvl, refToNew_new, aff_g2l_new, setting_coarseCutoffTH*levelCutoffRepeat);
+			double res_imu_new;
+			if(lvl<=0 && imu_use_flag){
+			  	res_imu_new = calcIMUResAndGS(H_imu, b_imu, refToNew_new, IMU_preintegrator,res_PVPhi,resNew[0],imu_track_w[lvl]);
+			}
 
 			bool accept = (resNew[0] / resNew[1]) < (resOld[0] / resOld[1]);
+			if(imu_use_flag){
+				if((vi->imu_track_ready) && lvl<=0){
+			 		accept = (resNew[0] / resNew[1] * resOld[1] + res_imu_new) < (resOld[0] + res_imu_old);
+				}
+			}
 
 			if(debugPrint)
 			{
@@ -633,6 +797,7 @@ bool CoarseTracker::trackNewestCoarse(
 			{
 				calcGSSSE(lvl, H, b, refToNew_new, aff_g2l_new);
 				resOld = resNew;
+				if (imu_use_flag) res_imu_old = res_imu_new;
 				aff_g2l_current = aff_g2l_new;
 				refToNew_current = refToNew_new;
 				lambda *= 0.5;
@@ -797,6 +962,10 @@ void CoarseTracker::debugPlotIDepthMapFloat(std::vector<IOWrap::Output3DWrapper*
     MinimalImageF mim(w[lvl], h[lvl], idepth[lvl]);
     for(IOWrap::Output3DWrapper* ow : wraps)
         ow->pushDepthImageFloat(&mim, lastRef);
+}
+
+void CoarseTracker::setIMUData_Pointer(IMUData* _IMU_Data){
+	IMU_Data = _IMU_Data;
 }
 
 

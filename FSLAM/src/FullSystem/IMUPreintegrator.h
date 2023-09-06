@@ -45,6 +45,12 @@ public:
         m_state_twd = Sim3(m_T_WD_l.inverse()*m_T_WD).log();
     }
 
+    void set_T_BC(SE3 _T_BC){
+        T_BC = _T_BC;
+    }
+
+    SE3 T_BC;
+
     Sim3 m_T_WD;
     Sim3 m_T_WD_l;
     Sim3 m_T_WD_l_half;
@@ -61,7 +67,7 @@ class IMUPreintegrator{
 public:
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     
-    IMUPreintegrator(const Mat33& _GyrCov, const Mat33& _AccCov);
+    IMUPreintegrator();
     IMUPreintegrator(const IMUPreintegrator& pre);
     
     // reset to initial state

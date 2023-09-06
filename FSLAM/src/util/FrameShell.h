@@ -22,6 +22,7 @@ namespace HSLAM
 
 		// constantly adapted.
 		
+		SE3 camToWorld;				// Write: TRACKING, while frame is still fresh; MAPPING: only when locked [shellPoseMutex].
 		AffLight aff_g2l;
 		bool poseValid;
 
@@ -127,7 +128,6 @@ namespace HSLAM
 
 		private:
 			boost::mutex shellPoseMutex;
-			SE3 camToWorld; // Write: TRACKING, while frame is still fresh; MAPPING: only when locked [shellPoseMutex].
 			Sim3 worldToCamOpti; //camToWorld.inverse
 			Sim3 worldToCamOptiInv;
 
