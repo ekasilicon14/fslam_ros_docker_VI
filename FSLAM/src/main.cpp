@@ -212,8 +212,9 @@ int main(int argc, char **argv)
 		exit(1);
 	}
 
+	IMUData* imu_reader;
 	if(!imu.empty() && !imu_calib.empty()){
-		IMUData* imu_reader = new IMUData(imu, imu_calib);
+		imu_reader = new IMUData(imu, imu_calib);
 		imu_reader->getIMUfiles_euroc();
 		imu_reader->getIMUinfo_euroc();
 

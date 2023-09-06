@@ -32,8 +32,9 @@
 #include "util/settings.h"
 #include "OptimizationBackend/MatrixAccumulators.h"
 #include "IOWrapper/Output3DWrapper.h"
+#include "FullSystem/IMUPreintegrator.h"
 
-
+#include "util/DatasetReader.h"
 
 
 namespace HSLAM
@@ -53,13 +54,15 @@ public:
 			FrameHessian* newFrameHessian,
 			SE3 &lastToNew_out, AffLight &aff_g2l_out,
 			int coarsestLvl, Vec5 minResForAbort,
-			IOWrap::Output3DWrapper* wrap=0);
+			IOWrap::Output3DWrapper* wrap=0, IMUVariables* vi = nullptr);
 
 	void setCoarseTrackingRef(
 			std::vector<FrameHessian*> frameHessians);
 
 	void makeK(
 			CalibHessian* HCalib);
+
+	void setIMUData_Pointer(IMUData* _IMU_Data);
 
 	bool debugPrint, debugPlot;
 
@@ -88,6 +91,8 @@ public:
 	Vec5 lastResiduals;
 	Vec3 lastFlowIndicators;
 	double firstCoarseRMSE;
+	int pc_n[PYR_LEVELS];
+
 private:
 
 
@@ -98,6 +103,7 @@ private:
 
 
 	Vec6 calcResAndGS(int lvl, Mat88 &H_out, Vec8 &b_out, const SE3 &refToNew, AffLight aff_g2l, float cutoffTH);
+	double calcIMUResAndGS(Mat66 &H_out, Vec6 &b_out, SE3 &refToNew, const IMUPreintegrator &IMU_preintegrator, Vec9 &res_PVPhi, double PointEnergy, double imu_track_weight, IMUVariables* vi = nullptr);
 	Vec6 calcRes(int lvl, const SE3 &refToNew, AffLight aff_g2l, float cutoffTH);
 	void calcGSSSE(int lvl, Mat88 &H_out, Vec8 &b_out, const SE3 &refToNew, AffLight aff_g2l);
 	void calcGS(int lvl, Mat88 &H_out, Vec8 &b_out, const SE3 &refToNew, AffLight aff_g2l);
@@ -107,7 +113,6 @@ private:
 	float* pc_v[PYR_LEVELS];
 	float* pc_idepth[PYR_LEVELS];
 	float* pc_color[PYR_LEVELS];
-	int pc_n[PYR_LEVELS];
 
 	// warped buffers
 	float* buf_warped_idepth;
@@ -125,6 +130,8 @@ private:
 
 
 	Accumulator9 acc;
+
+	IMUData* IMU_Data;
 };
 
 

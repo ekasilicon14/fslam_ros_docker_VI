@@ -656,7 +656,8 @@ bool CoarseTracker::trackNewestCoarse(
 		SE3 &lastToNew_out, AffLight &aff_g2l_out,
 		int coarsestLvl,
 		Vec5 minResForAbort,
-		IOWrap::Output3DWrapper* wrap)
+		IOWrap::Output3DWrapper* wrap,
+		IMUVariables* vi)
 {
 	debugPlot = setting_render_displayCoarseTrackingFull;
 	debugPrint = !setting_debugout_runquiet;
@@ -676,6 +677,47 @@ bool CoarseTracker::trackNewestCoarse(
 
 	bool haveRepeated = false;
 
+	IMUPreintegrator IMU_preintegrator;
+
+	std::vector<double> imu_track_w(coarsestLvl,0);
+
+	if(imu_use_flag){
+		Mat33 temp_GyrCov = IMU_Data->getGyrCov();
+		Mat33 temp_AccCov = IMU_Data->getAccCov();
+
+		IMU_preintegrator.setCov(temp_GyrCov, temp_AccCov);
+
+		double time_start = lastRef->shell->timestamp;
+		double time_end = newFrame->shell->timestamp;
+		
+		int index;
+		for(int i=0;i<IMU_Data->get_timesize();++i){
+			if(IMU_Data->get_timestampdata(i)>time_start||fabs(time_start-IMU_Data->get_timestampdata(i))<0.001){
+			index = i;
+			break;
+			}
+		}
+		
+		while(1){
+			double delta_t; 
+			if(IMU_Data->get_timestampdata(index+1)<time_end)
+				delta_t = IMU_Data->get_timestampdata(index+1)-IMU_Data->get_timestampdata(index);
+			else{
+				delta_t = time_end - IMU_Data->get_timestampdata(index);
+				if(delta_t<0.000001)break;
+			}
+			IMU_preintegrator.update(IMU_Data->get_gyrodata(index)-lastRef->bias_g, IMU_Data->get_acceldata(index)-lastRef->bias_a, delta_t);
+			if(IMU_Data->get_timestampdata(index+1)>=time_end)
+			break;
+			index++;
+		}
+		
+		imu_track_w[0] = imu_weight_tracker;
+		imu_track_w[1] = imu_track_w[0]/1.2;
+		imu_track_w[2] = imu_track_w[1]/1.5;
+		imu_track_w[3] = imu_track_w[2]/2;
+		imu_track_w[4] = imu_track_w[3]/3;
+	}
 
 	Mat88 H; Vec8 b;
 	for(int lvl=coarsestLvl; lvl>=0; lvl--)
@@ -696,6 +738,13 @@ bool CoarseTracker::trackNewestCoarse(
 
 		// Calculate H and b for Gauss Newton Optimization
 		calcGSSSE(lvl, H, b, refToNew_current, aff_g2l_current);
+		Mat66 H_imu;
+		Vec6 b_imu;
+		Vec9 res_PVPhi;
+		double res_imu_old = 0;
+		if(lvl<=0 && imu_use_flag){
+		    res_imu_old = calcIMUResAndGS(H_imu, b_imu, refToNew_current, IMU_preintegrator,res_PVPhi,resOld[0],imu_track_w[lvl], vi);
+		}
 
 		float lambda = 0.01;
 
@@ -717,7 +766,18 @@ bool CoarseTracker::trackNewestCoarse(
 		for(int iteration=0; iteration < maxIterations[lvl]; iteration++)
 		{
 			Mat88 Hl = H;
+<<<<<<< HEAD
 			// Multiply diagonal by current lambda value
+=======
+
+			if(imu_use_flag){
+				if((vi->imu_track_ready) && lvl<=0){
+					Hl.block(0,0,6,6) = Hl.block(0,0,6,6) + H_imu;
+					b.block(0,0,6,1) = b.block(0,0,6,1) + b_imu.block(0,0,6,1);
+				}
+			}
+			
+>>>>>>> b0878cd (Final integration step 1. CoarseTracker.)
 			for(int i=0;i<8;i++) Hl(i,i) *= (1+lambda);
 			// Calculate increment
 			// inc = [w1, w2, w3, d1, d2, d3, a, b]
@@ -772,9 +832,18 @@ bool CoarseTracker::trackNewestCoarse(
 
 			// Cacluate residual for new pose
 			Vec6 resNew = calcRes(lvl, refToNew_new, aff_g2l_new, setting_coarseCutoffTH*levelCutoffRepeat);
+			double res_imu_new;
+			if(lvl<=0 && imu_use_flag){
+			  	res_imu_new = calcIMUResAndGS(H_imu, b_imu, refToNew_new, IMU_preintegrator,res_PVPhi,resNew[0],imu_track_w[lvl]);
+			}
 
 			// Accept if residual energy per point lowers
 			bool accept = (resNew[0] / resNew[1]) < (resOld[0] / resOld[1]);
+			if(imu_use_flag){
+				if((vi->imu_track_ready) && lvl<=0){
+			 		accept = (resNew[0] / resNew[1] * resOld[1] + res_imu_new) < (resOld[0] + res_imu_old);
+				}
+			}
 
 			if(debugPrint)
 			{
@@ -793,6 +862,7 @@ bool CoarseTracker::trackNewestCoarse(
 			{
 				calcGSSSE(lvl, H, b, refToNew_new, aff_g2l_new);
 				resOld = resNew;
+				if (imu_use_flag) res_imu_old = res_imu_new;
 				aff_g2l_current = aff_g2l_new;
 				refToNew_current = refToNew_new;
 				lambda *= 0.5;
@@ -968,6 +1038,10 @@ void CoarseTracker::debugPlotIDepthMapFloat(std::vector<IOWrap::Output3DWrapper*
     MinimalImageF mim(w[lvl], h[lvl], idepth[lvl]);
     for(IOWrap::Output3DWrapper* ow : wraps)
         ow->pushDepthImageFloat(&mim, lastRef);
+}
+
+void CoarseTracker::setIMUData_Pointer(IMUData* _IMU_Data){
+	IMU_Data = _IMU_Data;
 }
 
 

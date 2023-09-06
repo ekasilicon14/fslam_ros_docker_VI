@@ -97,6 +97,8 @@ public:
 
 	void setAdjointsF(CalibHessian* Hcalib);
 
+	void setIMUData_Pointer(IMUData* _IMU_Data);
+
 	std::vector<EFFrame*> frames;
 	int nPoints, nFrames, nResiduals;
 

@@ -17,6 +17,9 @@
 #include "OptimizationBackend/EnergyFunctional.h"
 #include "FullSystem/PixelSelector2.h"
 
+#include "FullSystem/IMUPreintegrator.h"
+#include "util/DatasetReader.h"
+
 #include <math.h>
 
 
@@ -152,6 +155,8 @@ public:
 	void debugPlot(std::string name);
 
 	void printFrameLifetimes();
+
+	void setIMUData(IMUData* _IMU_Data);
 	// contains pointers to active frames
 
 	void setVocab(DBoW3::Vocabulary* _Vocabpnt);
@@ -169,6 +174,8 @@ public:
 
 	boost::mutex mapMutex;
 
+	void initFirstFrame_imu(FrameHessian* fh);
+
 	CalibHessian Hcalib;
 	std::shared_ptr<Matcher> matcher;
 	std::shared_ptr<Map> globalMap;
@@ -179,6 +186,7 @@ public:
 	boost::mutex trackMutex;
 	void BAatExit();
 
+	IMUVariables* vi;
 
 private:
 
@@ -258,7 +266,7 @@ private:
 	long int statistics_numMargResBwd;
 	float statistics_lastFineTrackRMSE;
 
-
+	IMUData* IMU_Data;
 
 
 
