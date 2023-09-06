@@ -21,12 +21,20 @@ public:
         m_T_WD_l = m_T_WD_l_half;
     }
 
+    void set_TWDl_2_TWD(){
+        m_T_WD_l = m_T_WD;
+    }
+
     void set_TWDl_half_2_TWD(){
         m_T_WD_l_half = m_T_WD;
     }
 
     void reset_Mnum(){
         m_M_num = 0;
+    }
+
+    void reset_state_twd(){
+        m_state_twd.setZero();
     }
 
     void increment_Mnum(){
@@ -47,6 +55,14 @@ public:
 
     void set_T_BC(SE3 _T_BC){
         T_BC = _T_BC;
+    }
+
+    void increment_step_twd(float stepfacC){
+        m_state_twd += stepfacC*m_state_twd;
+    }
+
+    void change_m_T_WD(Sim3 T_WD_change){
+        m_T_WD = m_T_WD_l*T_WD_change;
     }
 
     SE3 T_BC;

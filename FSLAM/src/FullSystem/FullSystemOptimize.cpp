@@ -311,6 +311,26 @@ bool FullSystem::doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,f
 	else
 	{
 		Hcalib.setValue(Hcalib.value_backup + stepfacC*Hcalib.step);
+		Sim3 T_WD_change  = Sim3::exp(Vec7::Zero());
+
+		if(imu_use_flag){
+		  vi->increment_step_twd(stepfacC);
+		  Vec7 state_twd = (vi->m_state_twd);
+		  int M_num2 = (vi->m_M_num2);
+		  if(std::exp(state_twd[6])<0.1||std::exp(state_twd[6])>10){
+				initFailed = true;
+				return false;
+		  }
+		  T_WD_change = Sim3::exp(state_twd);
+
+		  vi->change_m_T_WD(T_WD_change);
+		  
+		  if(M_num2==0){
+		      vi->set_TWDl_2_TWD();
+		      vi->reset_state_twd();
+		  }
+		  
+		}
 		for(FrameHessian* fh : frameHessians)
 		{
 			fh->setState(fh->state_backup + pstepfac.cwiseProduct(fh->step));
@@ -318,6 +338,14 @@ bool FullSystem::doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,f
 			sumB += fh->step[7]*fh->step[7];
 			sumT += fh->step.segment<3>(0).squaredNorm();
 			sumR += fh->step.segment<3>(3).squaredNorm();
+			if(imu_use_flag){
+			    fh->velocity += stepfacC*fh->step_imu.block(0,0,3,1);
+			    fh->delta_bias_g += stepfacC*fh->step_imu.block(3,0,3,1);
+			    fh->delta_bias_a += stepfacC*fh->step_imu.block(6,0,3,1);
+			    fh->shell->velocity = fh->velocity;
+			    fh->shell->delta_bias_g = fh->delta_bias_g;
+			    fh->shell->delta_bias_a = fh->delta_bias_a;
+			}
 
 			for(PointHessian* ph : fh->pointHessians)
 			{
@@ -515,6 +543,7 @@ float FullSystem::optimize(int mnumOptIts)
 			}
 			numPoints++;
 		}
+	}
 
     if(!setting_debugout_runquiet)
         printf("OPTIMIZE %d pts, %d active res, %d lin res!\n",ef->nPoints,(int)activeResiduals.size(), numLRes);
