@@ -1112,7 +1112,6 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
     shell->timestamp = image->timestamp;
     shell->incoming_id = id;
 	fh->shell = shell;
-	allFrameHistory.push_back(shell);
 
 
     // =========================== Place image and image settings into frame =========================
@@ -1122,6 +1121,13 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		fh->makeColourImages(image->r_image, image->g_image, image->b_image);
 	}
 
+	if(allFrameHistory.size()>0){
+	    fh->velocity = fh->shell->velocity = allFrameHistory.back()->velocity;
+	    fh->bias_g = fh->shell->bias_g = allFrameHistory.back()->bias_g + allFrameHistory.back()->delta_bias_g;
+	    fh->bias_a = fh->shell->bias_a = allFrameHistory.back()->bias_a + allFrameHistory.back()->delta_bias_a;
+	}
+	
+	allFrameHistory.push_back(shell);
 
 
 	// =========================== Process Image =========================
@@ -1132,6 +1138,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		{
 
 			coarseInitializer->setFirst(&Hcalib, fh);
+			if(imu_use_flag) initFirstFrame_imu(fh, vi);
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
