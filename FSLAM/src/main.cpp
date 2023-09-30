@@ -346,7 +346,10 @@ int main(int argc, char **argv)
             }
 
 			
-			if (!skipFrame) fullSystem->addActiveFrame(img, i);
+			if (!skipFrame){
+				fullSystem->addActiveFrame(img, i);
+			}
+
 			
 
 			delete img;

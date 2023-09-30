@@ -758,7 +758,11 @@ void FullSystem::solveSystem(int iteration, double lambda)
 			ef->lastNullspaces_affA,
 			ef->lastNullspaces_affB);
 
-	ef->solveSystemF(iteration, lambda,&Hcalib);
+	if(imu_use_flag){
+		ef->solveSystemF(iteration, lambda,&Hcalib, vi);
+	} else {
+		ef->solveSystemF(iteration, lambda,&Hcalib);
+	}
 }
 
 

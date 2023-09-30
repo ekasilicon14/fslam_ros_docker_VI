@@ -834,7 +834,7 @@ bool CoarseTracker::trackNewestCoarse(
 			Vec6 resNew = calcRes(lvl, refToNew_new, aff_g2l_new, setting_coarseCutoffTH*levelCutoffRepeat);
 			double res_imu_new;
 			if(lvl<=0 && imu_use_flag){
-			  	res_imu_new = calcIMUResAndGS(H_imu, b_imu, refToNew_new, IMU_preintegrator,res_PVPhi,resNew[0],imu_track_w[lvl]);
+			  	res_imu_new = calcIMUResAndGS(H_imu, b_imu, refToNew_new, IMU_preintegrator,res_PVPhi,resNew[0],imu_track_w[lvl], vi);
 			}
 
 			// Accept if residual energy per point lowers

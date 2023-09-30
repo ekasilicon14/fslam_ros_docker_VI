@@ -373,7 +373,7 @@ void PangolinDSOViewer::drawConstraints()
 
 	if(settings_showTrajectory->Get())
 	{
-		float colorRed[3] = {1,0,0};
+		float colorRed[3] = {1,0.7,0};
 		glColor3f(colorRed[0],colorRed[1],colorRed[2]);
 		glLineWidth(3);
 

@@ -1138,7 +1138,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		{
 
 			coarseInitializer->setFirst(&Hcalib, fh);
-			if(imu_use_flag) initFirstFrame_imu(fh, vi);
+			if(imu_use_flag) initFirstFrame_imu(fh);
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
