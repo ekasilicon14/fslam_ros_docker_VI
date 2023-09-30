@@ -192,7 +192,7 @@ Vec3 FullSystem::linearizeAll(bool fixLinearization)
 
 
 // applies step to linearization point.
-bool FullSystem::doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,float stepfacA,float stepfacD, IMUVariables* vi)
+bool FullSystem::doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,float stepfacA,float stepfacD)
 {
 //	float meanStepC=0,meanStepP=0,meanStepD=0;
 //	meanStepC += Hcalib.step.norm();
@@ -639,7 +639,11 @@ void FullSystem::solveSystem(int iteration, double lambda)
 			ef->lastNullspaces_affA,
 			ef->lastNullspaces_affB);
 
-	ef->solveSystemF(iteration, lambda,&Hcalib);
+	if(imu_use_flag){
+		ef->solveSystemF(iteration, lambda,&Hcalib, vi);
+	} else {
+		ef->solveSystemF(iteration, lambda,&Hcalib);
+	}
 }
 
 

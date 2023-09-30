@@ -123,7 +123,7 @@ public:
 	virtual ~FullSystem();
 
 	// adds a new frame, and creates point & residual structs.
-	void addActiveFrame(ImageAndExposure* image, int id, IMUVariables* vi = nullptr);
+	void addActiveFrame(ImageAndExposure* image, int id);
 
 	// marginalizes a frame. drops / marginalizes points & residuals.
 	void marginalizeFrame(FrameHessian* frame);
@@ -153,7 +153,7 @@ public:
 
 	boost::mutex mapMutex;
 
-	void initFirstFrame_imu(FrameHessian* fh, IMUVariables* vi);
+	void initFirstFrame_imu(FrameHessian* fh);
 
 	CalibHessian Hcalib;
 	std::shared_ptr<Matcher> matcher;
@@ -196,7 +196,7 @@ private:
 	// solce. eventually migrate to ef.
 	void solveSystem(int iteration, double lambda);
 	Vec3 linearizeAll(bool fixLinearization);
-	bool doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,float stepfacA,float stepfacD,IMUVariables* vi = nullptr);
+	bool doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,float stepfacA,float stepfacD);
 	void backupState(bool backupLastStep);
 	void loadSateBackup();
 	double calcLEnergy();

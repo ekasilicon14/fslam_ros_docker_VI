@@ -338,7 +338,7 @@ void KeyFrameDisplay::drawCam(float lineWidth, float* color, float sizeFactor,  
 
 		if(color == 0)
 		{
-			glColor3f(1,0,0);
+			glColor3f(1,0.7,0);
 		}
 		else
 			glColor3f(color[0],color[1],color[2]);

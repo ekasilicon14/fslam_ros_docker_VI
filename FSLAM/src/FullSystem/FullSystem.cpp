@@ -123,7 +123,7 @@ FullSystem::FullSystem()
 
 	if(imu_use_flag){
 		vi = new IMUVariables();
-		vi->set_T_BC(IMU_Data->getT_BC());
+
 		coarseTracker->setIMUData_Pointer(IMU_Data);
 	}
 
@@ -445,10 +445,18 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 		AffLight aff_g2l_this = aff_last_2_l;
 		SE3 lastF_2_fh_this = lastF_2_fh_tries[i];
 		// bool trackIndirect = trackNewestCoarse(fh->shell->frame, lastF->shell->frame, Test, pyrLevelsUsed - 1);
-		bool trackingIsGood = coarseTracker->trackNewestCoarse(
+		bool trackingIsGood;
+		if (imu_use_flag){
+			trackingIsGood = coarseTracker->trackNewestCoarse(
+			fh, lastF_2_fh_this, aff_g2l_this,
+			pyrLevelsUsed - 1,
+			achievedRes, 0, vi); // in each level has to be at least as good as the last try.
+		}else{	
+			trackingIsGood = coarseTracker->trackNewestCoarse(
 			fh, lastF_2_fh_this, aff_g2l_this,
 			pyrLevelsUsed - 1,
 			achievedRes); // in each level has to be at least as good as the last try.
+		}
 		tryIterations++;
 
 		if(i != 0)
@@ -941,7 +949,7 @@ void FullSystem::flagPointsForRemoval()
 }
 
 
-void FullSystem::addActiveFrame( ImageAndExposure* image, int id , IMUVariables* vi)
+void FullSystem::addActiveFrame(ImageAndExposure* image, int id)
 {
 
     if(isLost) return;
@@ -987,7 +995,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id , IMUVariables*
 		{
 
 			coarseInitializer->setFirst(&Hcalib, fh);
-			if(imu_use_flag) initFirstFrame_imu(fh, vi);
+			if(imu_use_flag) initFirstFrame_imu(fh);
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
@@ -1054,7 +1062,8 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id , IMUVariables*
 
 
 		//perform joint optimization here
-		Vec5 tres = trackNewCoarse(fh, ! (isUsable && computedBoW) );
+		Vec5 tres;
+		tres = trackNewCoarse(fh, ! (isUsable && computedBoW) );
 		
 
 		int nFrametoLocalMapMatches = SearchLocalPoints(shell->frame);
@@ -1116,7 +1125,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id , IMUVariables*
 	}
 }
 
-void FullSystem::initFirstFrame_imu(FrameHessian* fh, IMUVariables* vi){
+void FullSystem::initFirstFrame_imu(FrameHessian* fh){
 	int index;
 
 	if((IMU_Data->get_timesize())>0){

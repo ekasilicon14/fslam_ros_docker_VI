@@ -53,10 +53,6 @@ public:
         m_state_twd = Sim3(m_T_WD_l.inverse()*m_T_WD).log();
     }
 
-    void set_T_BC(SE3 _T_BC){
-        T_BC = _T_BC;
-    }
-
     void increment_step_twd(float stepfacC){
         m_state_twd += stepfacC*m_state_twd;
     }

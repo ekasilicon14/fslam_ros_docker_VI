@@ -371,7 +371,7 @@ void PangolinDSOViewer::drawConstraints()
 
 	if(settings_showTrajectory->Get())
 	{
-		float colorRed[3] = {1,0,0};
+		float colorRed[3] = {1,0.7,0};
 		glColor3f(colorRed[0],colorRed[1],colorRed[2]);
 		glLineWidth(3);
 
@@ -452,8 +452,8 @@ void PangolinDSOViewer::DrawIndirectMap(bool bDrawGraph)
 		// glPointSize(mPointSize);
 		// glBegin(GL_POINTS);
 		// glColor3f(0.0,0.0,0.0);
-		Vec3b blue(0, 0, 255);
-		Vec3b red(255, 0, 0);
+		Vec3b blue(40, 153, 137);
+		Vec3b red(255, 58, 32);
 
 		double scaledVarThresh = settings_scaledVarTH->Get();
 		double absVarTH = settings_absVarTH->Get();

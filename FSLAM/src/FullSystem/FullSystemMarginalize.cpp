@@ -126,8 +126,11 @@ void FullSystem::marginalizeFrame(FrameHessian* frame)
 
 	assert((int)frame->pointHessians.size()==0);
 
-
-	ef->marginalizeFrame(frame->efFrame);
+	if(imu_use_flag){
+		ef->marginalizeFrame(frame->efFrame, vi);
+	} else {
+		ef->marginalizeFrame(frame->efFrame);
+	}
 
 	// drop all observations of existing points in that frame.
 
