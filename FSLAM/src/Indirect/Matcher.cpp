@@ -14,10 +14,10 @@ namespace HSLAM
     const int Matcher::TH_LOW = 50;
     const int Matcher::HISTO_LENGTH = 30;
 
-    int Matcher::SearchByBoWTracking(shared_ptr<Frame> pKF, shared_ptr<Frame> F, float nnRatio, bool mbCheckOrientation, std::vector<std::shared_ptr<MapPoint>> &vpMapPointMatches)
+    int Matcher::SearchByBoWTracking(shared_ptr<Frame> pKF, shared_ptr<Frame> F, float nnRatio, bool mbCheckOrientation, std::vector<std::shared_ptr<MapPoint>> &vpMapPointMatches,  DBoW3::Vocabulary* _weakVocabpnt)
     {
-        pKF->ComputeBoVW();// won't cost a thing if already computed.
-        F->ComputeBoVW();
+        pKF->ComputeBoVW(_weakVocabpnt);// won't cost a thing if already computed.
+        F->ComputeBoVW(_weakVocabpnt);
         const vector<std::shared_ptr<MapPoint>> vpMapPointsKF = pKF->getMapPointsV();
 
         vpMapPointMatches = std::vector<std::shared_ptr<MapPoint>>(F->nFeatures, nullptr);

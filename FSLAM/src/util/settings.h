@@ -9,7 +9,6 @@ namespace HSLAM
 {
 
     extern bool Pause; //not a good idea:)
-    extern DBoW3::Vocabulary Vocab;
     extern bool LoopClosure;
     extern int gridSize;
     extern int mnGridCols, mnGridRows;

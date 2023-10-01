@@ -135,6 +135,8 @@ public:
 	void printFrameLifetimes();
 	// contains pointers to active frames
 
+	void setVocab(DBoW3::Vocabulary* _Vocabpnt);
+
     std::vector<IOWrap::Output3DWrapper*> outputWrapper;
 
 	bool isLost;

@@ -1011,7 +1011,8 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 
 		if (nMatches < 20)
 		{
-			nMatches  = matcher->SearchByBoWTracking(mpReferenceKF, shell->frame, 0.7, true, shell->frame->tMapPoints);
+			DBoW3::Vocabulary* weakVocanpnt = loopCloser->getVocab();
+			nMatches  = matcher->SearchByBoWTracking(mpReferenceKF, shell->frame, 0.7, true, shell->frame->tMapPoints, weakVocanpnt);
 			computedBoW = true;
 		}
 
@@ -1019,7 +1020,8 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 
 		if (!isUsable && !computedBoW)
 		{
-			nMatches  = matcher->SearchByBoWTracking(mpReferenceKF, shell->frame, 0.7, true, shell->frame->tMapPoints);
+			DBoW3::Vocabulary* weakVocanpnt = loopCloser->getVocab();
+			nMatches  = matcher->SearchByBoWTracking(mpReferenceKF, shell->frame, 0.7, true, shell->frame->tMapPoints, weakVocanpnt);
 			isUsable = PoseOptimization(shell->frame, &Hcalib);
 			computedBoW = true;
 		}
@@ -2427,6 +2429,12 @@ void FullSystem::BAatExit()
 	BundleAdjustment(allKFrames, allMapPoints, 10, &stopGBA, true, true, currMaxKF, currMaxKF - 15, currMaxMp);
 	for (auto it : allKeyFramesHistory)
 	    it->setRefresh(true);
+}
+
+void FullSystem::setVocab(DBoW3::Vocabulary* _Vocabpnt)
+{
+	loopCloser->lc_setVocab(_Vocabpnt);
+	globalMap->m_setVocab(_Vocabpnt);
 }
 
 

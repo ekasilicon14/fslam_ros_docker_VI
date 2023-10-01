@@ -36,6 +36,8 @@ namespace HSLAM {
         void Run();
         void SetFinish(bool finish = true);
         void copyActiveMapData(std::vector<std::shared_ptr<Frame>> & _KFs ,std::vector<std::shared_ptr<MapPoint>> & _MPs);
+        void lc_setVocab(DBoW3::Vocabulary* _Vocabpnt);
+        DBoW3::Vocabulary* getVocab();
 
     private:
         Sim3 mScw;
@@ -79,7 +81,7 @@ namespace HSLAM {
         std::vector<std::shared_ptr<MapPoint>> ActivePoints;
         std::vector<std::shared_ptr<Frame>> ActiveFrames;
 
-
+        DBoW3::Vocabulary* lc_Vocabpnt;
     };
 }
 

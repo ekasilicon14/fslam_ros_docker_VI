@@ -27,7 +27,7 @@ namespace HSLAM
         bool PosInGrid(const cv::KeyPoint &kp, int &posX, int &posY);
 
         std::vector<size_t> GetFeaturesInArea(const float &x, const float &y, const float &r) const;
-        void ComputeBoVW();
+        void ComputeBoVW(DBoW3::Vocabulary* _Vocabpnt);
         void assignFeaturesToGrid();
         
         inline std::shared_ptr<MapPoint> getMapPoint(int idx)

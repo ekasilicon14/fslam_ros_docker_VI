@@ -20,6 +20,7 @@ namespace HSLAM {
         currMaxMp = 0;
         currMaxKF = 0;
         minActId = 0;
+        lc_Vocabpnt = nullptr;
     }
 
     void LoopCloser::InsertKeyFrame(shared_ptr<Frame> &frame, int maxMpId)
@@ -55,7 +56,7 @@ namespace HSLAM {
                     for (auto it : KFqueue)
                     {
                         auto frame = std::get<0>(it);
-                        frame->ComputeBoVW();
+                        frame->ComputeBoVW(lc_Vocabpnt);
                         globalMap.lock()->KfDB->add(frame);
                         frame->SetErase(); //allow mapper to erase it if deemed it not useful already!
                     }
@@ -67,7 +68,7 @@ namespace HSLAM {
                 //copy a snapshot of active frames and mapPoints when the candidate was inserted!! use the max KFIds to keep out all new data from the loop closure process (newer MapPoints or Kfs should be helf fixed to preseve gauge!)
                 std::tie(currentKF, ActiveFrames, ActivePoints, currMaxKF, currMaxMp) = KFqueue.front();
                 
-                currentKF->ComputeBoVW();
+                currentKF->ComputeBoVW(lc_Vocabpnt);
                 KFqueue.pop_front(); 
 
             }
@@ -95,6 +96,15 @@ namespace HSLAM {
         }
 
         finished = true;
+    }
+
+    void LoopCloser::lc_setVocab(DBoW3::Vocabulary* _Vocabpnt){
+        lc_Vocabpnt = _Vocabpnt;
+    }
+
+    DBoW3::Vocabulary* LoopCloser::getVocab()
+    {;
+        return lc_Vocabpnt;
     }
 
     void LoopCloser::copyActiveMapData(std::vector<std::shared_ptr<Frame>> & _KFs ,std::vector<std::shared_ptr<MapPoint>> & _MPs)
@@ -148,7 +158,7 @@ namespace HSLAM {
                 continue;
             const DBoW3::BowVector &BowVec = pKF->mBowVec;
 
-            float score = Vocab.score(CurrentBowVec, BowVec);
+            float score = lc_Vocabpnt->score(CurrentBowVec, BowVec);
 
             if (score < minScore)
                 minScore = score;

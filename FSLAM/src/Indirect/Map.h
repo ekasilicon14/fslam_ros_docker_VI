@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 
 #include <boost/thread.hpp>
 #include <memory>
@@ -28,7 +28,7 @@ namespace HSLAM
 
         boost::mutex mMutexMap;
 
-        bool Busy = false;  // is pose graph running?
+        bool Busy = false; // is pose graph running?
         boost::mutex mutexBusy;
 
     public:
@@ -44,8 +44,9 @@ namespace HSLAM
         void InformNewBigChange();
         int GetLastBigChangeIdx();
 
-        void GetAllKeyFrames(std::vector<std::shared_ptr<Frame>>& _Out);
-        void GetAllMapPoints(std::vector<std::shared_ptr<MapPoint>>& _Out);
+        void GetAllKeyFrames(std::vector<std::shared_ptr<Frame>> &_Out);
+        void GetAllMapPoints(std::vector<std::shared_ptr<MapPoint>> &_Out);
+        void m_setVocab(DBoW3::Vocabulary *_Vocabpnt);
         std::vector<std::shared_ptr<MapPoint>> GetReferenceMapPoints();
 
         long unsigned int MapPointsInMap();
@@ -55,7 +56,8 @@ namespace HSLAM
 
         void clear();
 
-        bool isIdle() {
+        bool isIdle()
+        {
             boost::unique_lock<boost::mutex> lock(mutexBusy);
             return !Busy;
         }
@@ -69,7 +71,6 @@ namespace HSLAM
         std::vector<std::shared_ptr<Frame>> mvpKeyFrameOrigins;
         std::shared_ptr<KeyFrameDatabase> KfDB;
         boost::mutex mMutexMapUpdate;
-
     };
 
     class KeyFrameDatabase
@@ -82,15 +83,20 @@ namespace HSLAM
 
         void erase(std::shared_ptr<Frame> pKF);
 
+        void kf_setVocab(DBoW3::Vocabulary *_Vocabpnt);
+
+        void resize();
+
         void clear();
 
         // Loop Detection
         std::vector<std::shared_ptr<Frame>> DetectLoopCandidates(std::shared_ptr<Frame> pKF, float minScore);
 
     protected:
-
         // Inverted file
         std::vector<std::list<std::shared_ptr<Frame>>> mvInvertedFile;
+
+        DBoW3::Vocabulary* m_Vocabpnt;
 
         // Mutex
         boost::mutex mMutex;

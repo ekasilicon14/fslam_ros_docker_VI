@@ -32,7 +32,6 @@ namespace HSLAM
 
 bool Pause = false;
 bool LoopClosure = false;
-DBoW3::Vocabulary Vocab;
 int gridSize = 10;
 int mnGridCols = 64;
 int mnGridRows = 48;

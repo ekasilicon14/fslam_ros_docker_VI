@@ -129,13 +129,15 @@ int main(int argc, char **argv)
 	default:
 		break;
 	}
-
+	
+	DBoW3::Vocabulary* Vocabpnt;
 	if(LoopClosure && !vocabPath.empty())
 	{
-		Vocab.load(vocabPath.c_str());
+		Vocabpnt = new DBoW3::Vocabulary();
+		Vocabpnt->load(vocabPath.c_str());
 
 		printf("Loading Vocabulary from %s!\n", vocabPath.c_str());
-		if (Vocab.empty())
+		if (Vocabpnt->empty() || Vocabpnt == NULL)
 		{
 			printf("Failed to load vocabulary! Exit\n");
 			exit(1);
@@ -214,6 +216,12 @@ int main(int argc, char **argv)
 	FullSystem* fullSystem = new FullSystem();
 	fullSystem->setGammaFunction(reader->getPhotometricGamma());
 	fullSystem->linearizeOperation = (playbackSpeed == 0);
+
+	if(LoopClosure)
+	{
+		fullSystem->setVocab(Vocabpnt);
+		printf("Vocabulary Set\n");
+	}
 
 	IOWrap::PangolinDSOViewer* viewer = 0;
 	if(!disableAllDisplay)
@@ -334,6 +342,12 @@ int main(int argc, char **argv)
 					fullSystem->setGammaFunction(reader->getPhotometricGamma());
 					fullSystem->linearizeOperation = (playbackSpeed == 0);
 
+					if(LoopClosure)
+					{
+						fullSystem->setVocab(Vocabpnt);
+						printf("Vocabulary Set\n");
+					}
+
 					fullSystem->outputWrapper = wraps;
 
                     setting_fullResetRequested=false;
@@ -405,6 +419,11 @@ int main(int argc, char **argv)
 	{
 		delete fullSystem;
 		fullSystem = nullptr;
+	}
+
+	if(LoopClosure && !vocabPath.empty())
+	{
+		delete Vocabpnt;
 	}
 
 	printf("DELETE READER!\n");

@@ -227,7 +227,7 @@ namespace HSLAM
     }
 
 
-    void Frame::ComputeBoVW()
+    void Frame::ComputeBoVW(DBoW3::Vocabulary* weakVocabpnt)
     {
         boost::lock_guard<boost::mutex> l(BoVWmutex);
         if (mBowVec.empty())
@@ -236,7 +236,9 @@ namespace HSLAM
             vDesc.reserve(Descriptors.rows);
             for (int j = 0; j < Descriptors.rows; ++j)
                 vDesc.push_back(Descriptors.row(j));
-            Vocab.transform(vDesc, mBowVec, mFeatVec, 4);
+
+            if (!(weakVocabpnt->empty()))
+                weakVocabpnt->transform(vDesc, mBowVec, mFeatVec, 4);
         }
     }
 

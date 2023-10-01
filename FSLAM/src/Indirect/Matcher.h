@@ -1,5 +1,6 @@
 #pragma once
 #include "util/NumType.h"
+#include "DBoW3/Vocabulary.h"
 #include <iostream>
 
 #if _WIN32 || _WIN64
@@ -77,7 +78,7 @@ namespace HSLAM
         Matcher(){}
         ~Matcher() {}
 
-        int SearchByBoWTracking(std::shared_ptr<Frame> pKF, std::shared_ptr<Frame> F, float nnRatio, bool mbCheckOrientation, std::vector<std::shared_ptr<MapPoint>> &vpMapPointMatches);
+        int SearchByBoWTracking(std::shared_ptr<Frame> pKF, std::shared_ptr<Frame> F, float nnRatio, bool mbCheckOrientation, std::vector<std::shared_ptr<MapPoint>> &vpMapPointMatches, DBoW3::Vocabulary* _weakVocabpnt);
         int SearchByBow(std::shared_ptr<Frame> frame1, std::shared_ptr<Frame> frame2, float nnRatio, bool mbCheckOrientation, std::vector<std::shared_ptr<MapPoint>> &matches);
 
         int SearchBySim3(std::shared_ptr<Frame> pKF1, std::shared_ptr<Frame> pKF2, std::vector<std::shared_ptr<MapPoint>> &vpMatches12, const float &s12, const Mat33f &R12, const Vec3f &t12, const float th);

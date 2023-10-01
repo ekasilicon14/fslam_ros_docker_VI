@@ -22,6 +22,12 @@ namespace HSLAM
         clear();
     }
 
+    void Map::m_setVocab(DBoW3::Vocabulary* _Vocabpnt)
+    {
+        KfDB->kf_setVocab(_Vocabpnt);
+        KfDB->resize();
+    }
+
     void Map::AddKeyFrame(shared_ptr<Frame> pKF)
     {
         boost::lock_guard<boost::mutex> l(mMutexMap);
@@ -125,7 +131,18 @@ namespace HSLAM
     //KEYFRAMEDATABSE
     KeyFrameDatabase::KeyFrameDatabase()
     {
-        mvInvertedFile.resize(Vocab.size());
+        m_Vocabpnt = nullptr;
+        mvInvertedFile.resize(0);
+    }
+
+    void KeyFrameDatabase::kf_setVocab(DBoW3::Vocabulary* _Vocabpnt)
+    {
+        m_Vocabpnt = _Vocabpnt;
+    }
+
+    void KeyFrameDatabase::resize()
+    {
+        mvInvertedFile.resize(m_Vocabpnt->size());
     }
 
     void KeyFrameDatabase::add(shared_ptr<Frame> pKF)
@@ -160,7 +177,7 @@ namespace HSLAM
     void KeyFrameDatabase::clear()
     {
         mvInvertedFile.clear();
-        mvInvertedFile.resize(Vocab.size());
+        mvInvertedFile.resize(m_Vocabpnt->size());
     }
 
     vector<shared_ptr<Frame>> KeyFrameDatabase::DetectLoopCandidates(shared_ptr<Frame> pKF, float minScore)
@@ -224,7 +241,7 @@ namespace HSLAM
             {
                 nscores++;
 
-                float si = Vocab.score(pKF->mBowVec, pKFi->mBowVec); //mpVoc->score
+                float si = m_Vocabpnt->score(pKF->mBowVec, pKFi->mBowVec); //mpVoc->score
 
                 pKFi->mLoopScore = si;
                 if (si >= minScore)

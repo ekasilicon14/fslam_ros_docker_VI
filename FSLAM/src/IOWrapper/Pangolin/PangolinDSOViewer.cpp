@@ -219,7 +219,7 @@ void PangolinDSOViewer::run()
 			for(float d : lastNMappingMs) sd+=d;
 			*settings_mapFps=lastNMappingMs.size()*1000.0f / sd;
 			int offsetVOcabSize = 0;
-			if (!Vocab.empty())
+			if (LoopClosure)
 				offsetVOcabSize = 439.2; //the BovW model used is about 450 MB when loaded
 			*memUse = (getCurrentRSS() / 1048576) - offsetVOcabSize;
 		}
