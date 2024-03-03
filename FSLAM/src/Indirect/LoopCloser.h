@@ -40,8 +40,6 @@ namespace HSLAM {
         DBoW3::Vocabulary* getVocab();
 
     private:
-        Sim3 mScw;
-
         // data
         FullSystem *fullSystem;
         std::weak_ptr<Map> globalMap;  // global map
@@ -69,6 +67,7 @@ namespace HSLAM {
 
         long unsigned int mLastLoopKFid=0;
 
+        Sim3 mScw;
         std::vector<std::shared_ptr<MapPoint>> mvpCurrentMatchedPoints;
         std::vector<std::shared_ptr<MapPoint>> mvpLoopMapPoints;
 

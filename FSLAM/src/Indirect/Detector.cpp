@@ -116,7 +116,7 @@ void FeatureDetector::ExtractFeatures(cv::Mat &Image, cv::Mat &Occupancy, std::v
 //         else
 //         {
 //             int numPointsTotal = PixSelector->makeMaps(DirPyr, id, GradPyr, selectionMap, NumFeaturesToExtract); //NumFeatures
-//             for (int y = HALF_PATCH_SIZE + 3; y < height - HALF_PATCH_SIZE - 3; y++)             //patternPadding +1 and -2
+//             for (int y = HALF_PATCH_SIZE + 3; y < height - HALF_PATCH_SIZE - 3; y++)             //PATTERNPADDING +1 and -2
 //                 for (int x = HALF_PATCH_SIZE + 3; x < width - HALF_PATCH_SIZE - 3; x++)          //+1 and -2
 //                 {
 //                     int i = x + y * width;
@@ -150,7 +150,7 @@ void FeatureDetector::ExtractFeatures(cv::Mat &Image, cv::Mat &Occupancy, std::v
 //     {
 //         // vector<cv::KeyPoint> DSOSelection;
 //         int numPointsTotal = PixSelector->makeMaps(DirPyr, id, GradPyr, selectionMap, NumFeaturesToExtract); //NumFeatures
-//         for (int y = HALF_PATCH_SIZE + 3; y < height - HALF_PATCH_SIZE - 3; y++)             //patternPadding +1 and -2
+//         for (int y = HALF_PATCH_SIZE + 3; y < height - HALF_PATCH_SIZE - 3; y++)             //PATTERNPADDING +1 and -2
 //             for (int x = HALF_PATCH_SIZE + 3; x < width - HALF_PATCH_SIZE - 3; x++)          //+1 and -2
 //             {
 //                 int i = x + y * width;
@@ -170,7 +170,7 @@ void FeatureDetector::ExtractFeatures(cv::Mat &Image, cv::Mat &Occupancy, std::v
        
 //         vector<cv::KeyPoint> DSOSelection;
 //         int numPointsTotal = PixSelector->makeMaps(DirPyr, id, GradPyr, selectionMap, NumFeaturesToExtract); //NumFeatures
-//         for (int y = HALF_PATCH_SIZE + 1; y < height - HALF_PATCH_SIZE - 1; y++)             //patternPadding +1 and -2
+//         for (int y = HALF_PATCH_SIZE + 1; y < height - HALF_PATCH_SIZE - 1; y++)             //PATTERNPADDING +1 and -2
 //             for (int x = HALF_PATCH_SIZE + 1; x < width - HALF_PATCH_SIZE - 1; x++)          //+1 and -2
 //             {
 //                 int i = x + y * width;

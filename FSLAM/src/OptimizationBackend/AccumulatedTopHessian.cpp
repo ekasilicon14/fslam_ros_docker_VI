@@ -86,7 +86,7 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 			__m128 delta_a = _mm_set1_ps((float)(dp[6]));
 			__m128 delta_b = _mm_set1_ps((float)(dp[7]));
 
-			for(int i=0;i<patternNum;i+=4)
+			for(int i=0;i<PATTERNNUM;i+=4)
 			{
 				// PATTERN: rtz = resF - [JI*Jp Ja]*delta.
 				__m128 rtz = _mm_load_ps(((float*)&r->res_toZeroF)+i);
@@ -102,7 +102,7 @@ void AccumulatedTopHessianSSE::addPoint(EFPoint* p, EnergyFunctional const * con
 		Vec2f JI_r(0,0);
 		Vec2f Jab_r(0,0);
 		float rr=0;
-		for(int i=0;i<patternNum;i++)
+		for(int i=0;i<PATTERNNUM;i++)
 		{
 			JI_r[0] += resApprox[i] *rJ->JIdx[0][i];
 			JI_r[1] += resApprox[i] *rJ->JIdx[1][i];

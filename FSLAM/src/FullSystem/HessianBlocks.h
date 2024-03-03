@@ -1,7 +1,33 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
+
 #pragma once
 #define MAX_ACTIVE_FRAMES 100
 
- 
 #include "util/globalCalib.h"
 #include "vector"
  
@@ -10,6 +36,7 @@
 #include "util/NumType.h"
 #include "FullSystem/Residuals.h"
 #include "util/ImageAndExposure.h"
+
 
 
 namespace HSLAM
@@ -34,7 +61,7 @@ class EFPoint;
 
 #define SCALE_IDEPTH 1.0f		// scales internal value to idepth.
 #define SCALE_XI_ROT 1.0f
-#define SCALE_XI_TRANS 0.5f
+#define SCALE_XI_TRANS 1.0f
 #define SCALE_F 50.0f
 #define SCALE_C 50.0f
 #define SCALE_W 1.0f
@@ -54,12 +81,12 @@ class EFPoint;
 struct FrameFramePrecalc
 {
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-	// static values
+	// Static values
 	static int instanceCounter;
 	FrameHessian* host;	// defines row
 	FrameHessian* target;	// defines column
 
-	// precalc values
+	// Precalc values
 	Mat33f PRE_RTll;
 	Mat33f PRE_KRKiTll;
 	Mat33f PRE_RKiTll;
@@ -76,7 +103,7 @@ struct FrameFramePrecalc
 
 
     inline ~FrameFramePrecalc() {}
-    inline FrameFramePrecalc() {host=target=0;}
+    inline FrameFramePrecalc() : host(0), target(0), PRE_b0_mode(0.0), distanceLL(0.0) {}
 	void set(FrameHessian* host, FrameHessian* target, CalibHessian* HCalib);
 };
 
@@ -89,7 +116,7 @@ struct FrameHessian
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 	EFFrame* efFrame;
 
-	// constant info & pre-calculated values
+	// Constant info & pre-calculated values
 	//DepthImageWrap* frame;
 	FrameShell* shell;
 
@@ -122,7 +149,7 @@ struct FrameHessian
 	Mat42 nullspaces_affine;
 	Vec6 nullspaces_scale;
 
-	// variable info.
+	// Variable info.
 	SE3 worldToCam_evalPT;
 	Vec10 state_zero;
 	Vec10 state_scaled;
@@ -133,7 +160,8 @@ struct FrameHessian
 
 
     EIGEN_STRONG_INLINE const SE3 &get_worldToCam_evalPT() const {return worldToCam_evalPT;}
-    EIGEN_STRONG_INLINE const Vec10 &get_state_zero() const {return state_zero;}
+    // The first 6 parameters of state_zero seem to be always 0 (as this part is represented by the worldToCam_evalPT. The last two parameters on the other hand are not zero.
+    EIGEN_STRONG_INLINE const Vec10 &get_state_zero() const {return state_zero;} 
     EIGEN_STRONG_INLINE const Vec10 &get_state() const {return state;}
     EIGEN_STRONG_INLINE const Vec10 &get_state_scaled() const {return state_scaled;}
     EIGEN_STRONG_INLINE const Vec10 get_state_minus_stateZero() const {return get_state() - get_state_zero();}
@@ -219,13 +247,15 @@ struct FrameHessian
 
 		if(debugImage != 0) delete debugImage;
 	};
-	inline FrameHessian()
+	inline FrameHessian() :
+		ab_exposure(0.0),
+		idx(0)
 	{
 		instanceCounter++;
 		flaggedForMarginalization=false;
 		frameID = -1;
 		efFrame = 0;
-		frameEnergyTH = 8*8*patternNum;
+		frameEnergyTH = 8*8*PATTERNNUM;
 
 
 
@@ -272,6 +302,12 @@ struct FrameHessian
 
 };
 
+/**
+ * @brief Stores the calibration matrix information
+ * 
+ * The values here are usually the same as the global K function
+ * 
+ */
 struct CalibHessian
 {
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
@@ -292,12 +328,15 @@ struct CalibHessian
 	{
 
 		VecC initial_value = VecC::Zero();
+		// K matrix
 		initial_value[0] = fxG[0];
 		initial_value[1] = fyG[0];
 		initial_value[2] = cxG[0];
 		initial_value[3] = cyG[0];
 
+		// Set K matrix
 		setValueScaled(initial_value);
+		// Set zero point
 		value_zero = value;
 		value_minus_value_zero.setZero();
 
@@ -335,33 +374,39 @@ struct CalibHessian
 	{
 		// [0-3: Kl, 4-7: Kr, 8-12: l2r]
 		this->value = value;
+		// Scaled K matrix
 		value_scaled[0] = SCALE_F * value[0];
 		value_scaled[1] = SCALE_F * value[1];
 		value_scaled[2] = SCALE_C * value[2];
 		value_scaled[3] = SCALE_C * value[3];
 
+		// Scaled K matrix as float instead of double
 		this->value_scaledf = this->value_scaled.cast<float>();
-		this->value_scaledi[0] = 1.0f / this->value_scaledf[0];
-		this->value_scaledi[1] = 1.0f / this->value_scaledf[1];
-		this->value_scaledi[2] = - this->value_scaledf[2] / this->value_scaledf[0];
-		this->value_scaledi[3] = - this->value_scaledf[3] / this->value_scaledf[1];
+		//  Inverse scaled K matrix
+		this->value_scaledi[0] = 1.0f / this->value_scaledf[0]; // 1/f_x
+		this->value_scaledi[1] = 1.0f / this->value_scaledf[1]; // 1/f_y
+		this->value_scaledi[2] = - this->value_scaledf[2] / this->value_scaledf[0]; // -c_x/f_x
+		this->value_scaledi[3] = - this->value_scaledf[3] / this->value_scaledf[1]; // -c_y/f_y
 		this->value_minus_value_zero = this->value - this->value_zero;
 	};
 
 	inline void setValueScaled(const VecC &value_scaled)
 	{
 		this->value_scaled = value_scaled;
+		// Scaled K matrix as float instead of double
 		this->value_scaledf = this->value_scaled.cast<float>();
+		// K matrix with no scaling
 		value[0] = SCALE_F_INVERSE * value_scaled[0];
 		value[1] = SCALE_F_INVERSE * value_scaled[1];
 		value[2] = SCALE_C_INVERSE * value_scaled[2];
 		value[3] = SCALE_C_INVERSE * value_scaled[3];
 
 		this->value_minus_value_zero = this->value - this->value_zero;
-		this->value_scaledi[0] = 1.0f / this->value_scaledf[0];
-		this->value_scaledi[1] = 1.0f / this->value_scaledf[1];
-		this->value_scaledi[2] = - this->value_scaledf[2] / this->value_scaledf[0];
-		this->value_scaledi[3] = - this->value_scaledf[3] / this->value_scaledf[1];
+		// Inverted scaled K matrix
+		this->value_scaledi[0] = 1.0f / this->value_scaledf[0]; // 1/f_x
+		this->value_scaledi[1] = 1.0f / this->value_scaledf[1]; // 1/f_y
+		this->value_scaledi[2] = - this->value_scaledf[2] / this->value_scaledf[0]; // -c_x/f_x
+		this->value_scaledi[3] = - this->value_scaledf[3] / this->value_scaledf[1]; // -c_y/f_y
 	};
 
 
@@ -387,7 +432,7 @@ struct CalibHessian
 };
 
 
-// hessian component associated with one point.
+// Hessian component associated with one point.
 struct PointHessian
 {
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
@@ -424,6 +469,13 @@ struct PointHessian
 	enum PtStatus {ACTIVE=0, INACTIVE, OUTLIER, OOB, MARGINALIZED};
 	PtStatus status;
 
+	/**
+	 * @brief Set the status of the point
+	 * 
+	 * Possible values are ACTIVE, INACTIVE, OUTLIER, OOB (out of bounds), MARGINALIZED
+	 * 
+	 * @param s 
+	 */
     inline void setPointStatus(PtStatus s) {status=s;}
 
 
@@ -431,6 +483,11 @@ struct PointHessian
 		this->idepth = idepth;
 		this->idepth_scaled = SCALE_IDEPTH * idepth;
     }
+	/**
+	 * @brief Set the inverse depth value
+	 * 
+	 * @param idepth_scaled 
+	 */
 	inline void setIdepthScaled(float idepth_scaled) {
 		this->idepth = SCALE_IDEPTH_INVERSE * idepth_scaled;
 		this->idepth_scaled = idepth_scaled;

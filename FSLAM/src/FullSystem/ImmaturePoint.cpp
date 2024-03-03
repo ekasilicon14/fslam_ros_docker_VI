@@ -10,10 +10,10 @@ ImmaturePoint::ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, Ca
 
 	gradH.setZero();
 
-	for(int idx=0;idx<patternNum;idx++)
+	for(int idx=0;idx<PATTERNNUM;idx++)
 	{
-		int dx = patternP[idx][0];
-		int dy = patternP[idx][1];
+		int dx = PATTERNP[idx][0];
+		int dy = PATTERNP[idx][1];
 
         Vec3f ptc = getInterpolatedElement33BiLin(host->dI, u+dx, v+dy,wG[0]);
 
@@ -28,7 +28,7 @@ ImmaturePoint::ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, Ca
 		weights[idx] = sqrtf(setting_outlierTHSumComponent / (setting_outlierTHSumComponent + ptc.tail<2>().squaredNorm()));
 	}
 
-	energyTH = patternNum*setting_outlierTH;
+	energyTH = PATTERNNUM*setting_outlierTH;
 	energyTH *= setting_overallEnergyTHWeight*setting_overallEnergyTHWeight;
 
 	idepth_GT=0;
@@ -210,8 +210,8 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 
 
 	Vec2f rotatetPattern[MAX_RES_PER_POINT];
-	for(int idx=0;idx<patternNum;idx++)
-		rotatetPattern[idx] = Rplane * Vec2f(patternP[idx][0], patternP[idx][1]);
+	for(int idx=0;idx<PATTERNNUM;idx++)
+		rotatetPattern[idx] = Rplane * Vec2f(PATTERNP[idx][0], PATTERNP[idx][1]);
 
 
 
@@ -235,7 +235,7 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 	for(int i=0;i<numSteps;i++)
 	{
 		float energy=0;
-		for(int idx=0;idx<patternNum;idx++)
+		for(int idx=0;idx<PATTERNNUM;idx++)
 		{
 			float hitColor = getInterpolatedElement31(frame->dI,
 										(float)(ptx+rotatetPattern[idx][0]),
@@ -282,7 +282,7 @@ ImmaturePointStatus ImmaturePoint::traceOn(FrameHessian* frame,const Mat33f &hos
 	for(int it=0;it<setting_trace_GNIterations;it++)
 	{
 		float H = 1, b=0, energy=0;
-		for(int idx=0;idx<patternNum;idx++)
+		for(int idx=0;idx<PATTERNNUM;idx++)
 		{
 			Vec3f hitColor = getInterpolatedElement33(frame->dI,
 					(float)(bestU+rotatetPattern[idx][0]),
@@ -423,10 +423,10 @@ float ImmaturePoint::calcResidual(
 	const Vec3f &PRE_KtTll = precalc->PRE_KtTll;
 	Vec2f affLL = precalc->PRE_aff_mode;
 
-	for(int idx=0;idx<patternNum;idx++)
+	for(int idx=0;idx<PATTERNNUM;idx++)
 	{
 		float Ku, Kv;
-		if(!projectPoint(this->u+patternP[idx][0], this->v+patternP[idx][1], idepth, PRE_KRKiTll, PRE_KtTll, Ku, Kv))
+		if(!projectPoint(this->u+PATTERNP[idx][0], this->v+PATTERNP[idx][1], idepth, PRE_KRKiTll, PRE_KtTll, Ku, Kv))
 			{return 1e10;}
 
 		Vec3f hitColor = (getInterpolatedElement33(dIl, Ku, Kv, wG[0]));
@@ -470,10 +470,10 @@ double ImmaturePoint::linearizeResidual(
 
 	Vec2f affLL = precalc->PRE_aff_mode;
 
-	for(int idx=0;idx<patternNum;idx++)
+	for(int idx=0;idx<PATTERNNUM;idx++)
 	{
-		int dx = patternP[idx][0];
-		int dy = patternP[idx][1];
+		int dx = PATTERNP[idx][0];
+		int dy = PATTERNP[idx][1];
 
 		float drescale, u, v, new_idepth;
 		float Ku, Kv;

@@ -149,10 +149,10 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 	float wJI2_sum = 0;
 
-	for(int idx=0;idx<patternNum;idx++)
+	for(int idx=0;idx<PATTERNNUM;idx++)
 	{
 		float Ku, Kv;
-		if(!projectPoint(point->u+patternP[idx][0], point->v+patternP[idx][1], point->idepth_scaled, PRE_KRKiTll, PRE_KtTll, Ku, Kv))
+		if(!projectPoint(point->u+PATTERNP[idx][0], point->v+PATTERNP[idx][1], point->idepth_scaled, PRE_KRKiTll, PRE_KtTll, Ku, Kv))
 			{ state_NewState = ResState::OOB; return state_energy; }
 
 		projectedTo[idx][0] = Ku;
@@ -263,7 +263,7 @@ void PointFrameResidual::debugPlot()
 		else cT = Vec3b(255,255,255);
 	}
 
-	for(int i=0;i<patternNum;i++)
+	for(int i=0;i<PATTERNNUM;i++)
 	{
 		if((projectedTo[i][0] > 2 && projectedTo[i][1] > 2 && projectedTo[i][0] < wG[0]-3 && projectedTo[i][1] < hG[0]-3 ))
 			target->debugImage->setPixel1((float)projectedTo[i][0], (float)projectedTo[i][1],cT);

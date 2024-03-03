@@ -100,7 +100,7 @@ void EFResidual::fixLinearizationF(EnergyFunctional* ef)
 	__m128 delta_a = _mm_set1_ps((float)(dp[6]));
 	__m128 delta_b = _mm_set1_ps((float)(dp[7]));
 
-	for(int i=0;i<patternNum;i+=4)
+	for(int i=0;i<PATTERNNUM;i+=4)
 	{
 		// PATTERN: rtz = resF - [JI*Jp Ja]*delta.
 		__m128 rtz = _mm_load_ps(((float*)&J->resF)+i);

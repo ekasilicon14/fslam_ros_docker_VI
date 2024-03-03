@@ -124,8 +124,10 @@ FullSystem::FullSystem()
 	globalMap = std::make_shared<Map>();
 	matcher = std::make_shared<Matcher>();
 	if(LoopClosure)
+		{
 		// std::make_shared will not use the eigen alignment macro and cause an alignment error
 		loopCloser = std::shared_ptr<LoopCloser> (new LoopCloser(this));
+	}
 
 	Velocity = SE3();
 
@@ -1225,6 +1227,7 @@ void FullSystem::blockUntilMappingIsFinished()
 	}
 
 	mappingThread.join();
+	printf("Mapping Thread has been joined\n"); //debugNA
 
 }
 
@@ -1550,7 +1553,6 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 
 void FullSystem::makeNewTraces(FrameHessian* newFrame, float* gtDepth)
 {
-	pixelSelector->allowFast = true;
 	//int numPointsTotal = makePixelStatus(newFrame->dI, selectionMap, wG[0], hG[0], setting_desiredDensity);
 	int numPointsTotal = pixelSelector->makeMaps(newFrame, selectionMap,setting_desiredImmatureDensity);
 
@@ -1560,8 +1562,8 @@ void FullSystem::makeNewTraces(FrameHessian* newFrame, float* gtDepth)
 	newFrame->pointHessiansOut.reserve(numPointsTotal*1.2f);
 
 	SE3 Tcw = newFrame->shell->getPoseInverse();
-	for (int y = patternPadding + 1; y < hG[0] - patternPadding - 2; y++)
-		for (int x = patternPadding + 1; x < wG[0] - patternPadding - 2; x++)
+	for (int y = PATTERNPADDING + 1; y < hG[0] - PATTERNPADDING - 2; y++)
+		for (int x = PATTERNPADDING + 1; x < wG[0] - PATTERNPADDING - 2; x++)
 		{
 			int i = x + y * wG[0];
 			if (selectionMap[i] == 0)

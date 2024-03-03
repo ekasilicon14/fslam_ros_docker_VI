@@ -83,7 +83,7 @@ void FullSystem::setNewFrameEnergyTH()
 
 	if(allResVec.size()==0)
 	{
-		newFrame->frameEnergyTH = 12*12*patternNum;
+		newFrame->frameEnergyTH = 12*12*PATTERNNUM;
 		return;		// should never happen, but lets make sure.
 	}
 
@@ -371,7 +371,7 @@ void FullSystem::printOptRes(const Vec3 &res, double resL, double resM, double r
 {
 	printf("A(%f)=(AV %.3f). Num: A(%'d) + M(%'d); ab %f %f!\n",
 			res[0],
-			sqrtf((float)(res[0] / (patternNum*ef->resInA))),
+			sqrtf((float)(res[0] / (PATTERNNUM*ef->resInA))),
 			ef->resInA,
 			ef->resInM,
 			a,
@@ -548,13 +548,13 @@ float FullSystem::optimize(int mnumOptIts)
     }
 
 
-	statistics_lastFineTrackRMSE = sqrtf((float)(lastEnergy[0] / (patternNum*ef->resInA)));
+	statistics_lastFineTrackRMSE = sqrtf((float)(lastEnergy[0] / (PATTERNNUM*ef->resInA)));
 
 	if(calibLog != 0)
 	{
 		(*calibLog) << Hcalib.value_scaled.transpose() <<
 				" " << frameHessians.back()->get_state_scaled().transpose() <<
-				" " << sqrtf((float)(lastEnergy[0] / (patternNum*ef->resInA))) <<
+				" " << sqrtf((float)(lastEnergy[0] / (PATTERNNUM*ef->resInA))) <<
 				" " << ef->resInM << "\n";
 		calibLog->flush();
 	}
@@ -591,7 +591,7 @@ float FullSystem::optimize(int mnumOptIts)
 
 	debugPlotTracking();
 
-	return sqrtf((float)(lastEnergy[0] / (patternNum*ef->resInA)));
+	return sqrtf((float)(lastEnergy[0] / (PATTERNNUM*ef->resInA)));
 
 }
 

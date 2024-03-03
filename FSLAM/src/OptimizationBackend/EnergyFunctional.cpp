@@ -365,7 +365,7 @@ void EnergyFunctional::calcLEnergyPt(int min, int max, Vec10* stats, int tid)
 			__m128 delta_a = _mm_set1_ps((float)(dp[6]));
 			__m128 delta_b = _mm_set1_ps((float)(dp[7]));
 
-			for(int i=0;i+3<patternNum;i+=4)
+			for(int i=0;i+3<PATTERNNUM;i+=4)
 			{
 				// PATTERN: E = (2*res_toZeroF + J*delta) * J*delta.
 				__m128 Jdelta =            _mm_mul_ps(_mm_load_ps(((float*)(rJ->JIdx))+i),Jp_delta_x);
@@ -379,7 +379,7 @@ void EnergyFunctional::calcLEnergyPt(int min, int max, Vec10* stats, int tid)
 				Jdelta = _mm_mul_ps(Jdelta,r0);
 				E.updateSSENoShift(Jdelta);
 			}
-			for(int i=((patternNum>>2)<<2); i < patternNum; i++)
+			for(int i=((PATTERNNUM>>2)<<2); i < PATTERNNUM; i++)
 			{
 				float Jdelta = rJ->JIdx[0][i]*Jp_delta_x_1 + rJ->JIdx[1][i]*Jp_delta_y_1 +
 								rJ->JabF[0][i]*dp[6] + rJ->JabF[1][i]*dp[7];

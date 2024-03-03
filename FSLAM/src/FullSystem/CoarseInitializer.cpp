@@ -351,10 +351,10 @@ Vec3f CoarseInitializer::calcResAndGS(
 		// sum over all residuals.
 		bool isGood = true;
 		float energy=0;
-		for(int idx=0;idx<patternNum;idx++)
+		for(int idx=0;idx<PATTERNNUM;idx++)
 		{
-			int dx = patternP[idx][0];
-			int dy = patternP[idx][1];
+			int dx = PATTERNP[idx][0];
+			int dy = PATTERNP[idx][1];
 
 
 			Vec3f pt = RKi * Vec3f(point->u+dx, point->v+dy, 1) + t*point->idepth_new;
@@ -438,7 +438,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 		point->energy_new[0] = energy;
 
 		// update Hessian matrix.
-		for(int i=0;i+3<patternNum;i+=4)
+		for(int i=0;i+3<PATTERNNUM;i+=4)
 			acc9.updateSSE(
 					_mm_load_ps(((float*)(&dp0))+i),
 					_mm_load_ps(((float*)(&dp1))+i),
@@ -451,7 +451,7 @@ Vec3f CoarseInitializer::calcResAndGS(
 					_mm_load_ps(((float*)(&r))+i));
 
 
-		for(int i=((patternNum>>2)<<2); i < patternNum; i++)
+		for(int i=((PATTERNNUM>>2)<<2); i < PATTERNNUM; i++)
 			acc9.updateSingle(
 					(float)dp0[i],(float)dp1[i],(float)dp2[i],(float)dp3[i],
 					(float)dp4[i],(float)dp5[i],(float)dp6[i],(float)dp7[i],
@@ -750,7 +750,7 @@ void CoarseInitializer::setFirst(CalibHessian* HCalib, FrameHessian* newFrameHes
 		sel.currentPotential = 3;
 		int npts;
 		if(lvl == 0)
-			npts = sel.makeMaps(firstFrame, statusMap,densities[lvl]*w[0]*h[0],1,false,2);
+			npts = sel.makeMaps(firstFrame, statusMap,densities[lvl]*w[0]*h[0],1,2);
 		else
 			npts = makePixelStatus(firstFrame->dIp[lvl], statusMapB, w[lvl], h[lvl], densities[lvl]*w[0]*h[0]);
 
@@ -762,13 +762,13 @@ void CoarseInitializer::setFirst(CalibHessian* HCalib, FrameHessian* newFrameHes
 		int wl = w[lvl], hl = h[lvl];
 		Pnt* pl = points[lvl];
 		int nl = 0;
-		for(int y=patternPadding+1;y<hl-patternPadding-2;y++)
-		for(int x=patternPadding+1;x<wl-patternPadding-2;x++)
+		for(int y=PATTERNPADDING+1;y<hl-PATTERNPADDING-2;y++)
+		for(int x=PATTERNPADDING+1;x<wl-PATTERNPADDING-2;x++)
 		{
 			//if(x==2) printf("y=%d!\n",y);
 			if((lvl!=0 && statusMapB[x+y*wl]) || (lvl==0 && statusMap[x+y*wl] != 0))
 			{
-				//assert(patternNum==9);
+				//assert(PATTERNNUM==9);
 				pl[nl].u = x+0.1;
 				pl[nl].v = y+0.1;
 				pl[nl].idepth = 1;
@@ -781,19 +781,19 @@ void CoarseInitializer::setFirst(CalibHessian* HCalib, FrameHessian* newFrameHes
 
 				Eigen::Vector3f* cpt = firstFrame->dIp[lvl] + x + y*w[lvl];
 				float sumGrad2=0;
-				for(int idx=0;idx<patternNum;idx++)
+				for(int idx=0;idx<PATTERNNUM;idx++)
 				{
-					int dx = patternP[idx][0];
-					int dy = patternP[idx][1];
+					int dx = PATTERNP[idx][0];
+					int dy = PATTERNP[idx][1];
 					float absgrad = cpt[dx + dy*w[lvl]].tail<2>().squaredNorm();
 					sumGrad2 += absgrad;
 				}
 
 //				float gth = setting_outlierTH * (sqrtf(sumGrad2)+setting_outlierTHSumComponent);
-//				pl[nl].outlierTH = patternNum*gth*gth;
+//				pl[nl].outlierTH = PATTERNNUM*gth*gth;
 //
 
-				pl[nl].outlierTH = patternNum*setting_outlierTH;
+				pl[nl].outlierTH = PATTERNNUM*setting_outlierTH;
 
 
 

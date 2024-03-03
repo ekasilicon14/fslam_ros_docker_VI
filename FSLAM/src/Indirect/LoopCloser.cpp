@@ -467,7 +467,7 @@ namespace HSLAM {
 
     void LoopCloser::CorrectLoop()
     {
-        cout << "Loop detected!" << endl;
+        printf("Loop detected, to be corrected!");//debugNA
 
         // boost::unique_lock<boost::mutex> lck(fullSystem->mapMutex);  //
         auto gMap = globalMap.lock();
