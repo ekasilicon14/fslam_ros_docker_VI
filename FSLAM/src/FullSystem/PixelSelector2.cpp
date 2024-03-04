@@ -395,8 +395,6 @@ Eigen::Vector3i PixelSelector::select(const FrameHessian* const fh,
 	// Initialize output array
 	memset(map_out,0,w*h*sizeof(PixelSelectorStatus));
 
-
-
 	// Each pyramid level has lower gradient requirements
 	float dw1 = setting_gradDownweightPerLevel;
 	float dw2 = dw1*dw1;

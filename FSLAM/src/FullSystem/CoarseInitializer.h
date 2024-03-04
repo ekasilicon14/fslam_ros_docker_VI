@@ -1,3 +1,28 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #pragma once
 
 #include "util/NumType.h"
@@ -6,7 +31,6 @@
 #include "util/settings.h"
 #include "vector"
 #include <math.h>
-
 
 
 
@@ -21,10 +45,10 @@ struct Pnt
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 	// index in jacobian. never changes (actually, there is no reason why).
-	float u,v;
+	float u,v;			// position
 
 	// idepth / isgood / energy during optimization.
-	float idepth;
+	float idepth;		// inverse depth
 	bool isGood;
 	Vec2f energy;		// (UenergyPhotometric, energyRegularizer)
 	bool isGood_new;
@@ -40,28 +64,27 @@ public:
 	// max stepsize for idepth (corresponding to max. movement in pixel-space).
 	float maxstep;
 
-	// idx (x+y*w) of closest point one pyramid level above.
+	// idx (x+y*w) of closest point one pyramid level above
 	int parent;
 	float parentDist;
 
-	// idx (x+y*w) of up to 10 nearest points in pixel space.
+	// idx (x+y*w) of up to 10 nearest points in pixel space
 	int neighbours[10];
 	float neighboursDist[10];
 
-	float my_type;
+	float my_type;		// my_type is block level where point was selected (1,2 or 4) or ORB type
 	float outlierTH;
 };
 
 class CoarseInitializer {
 public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
-	CoarseInitializer(int w, int h);
+	CoarseInitializer(int ww, int hh);
 	~CoarseInitializer();
 
 
 	void setFirst(	CalibHessian* HCalib, FrameHessian* newFrameHessian);
 	bool trackFrame(FrameHessian* newFrameHessian, std::vector<IOWrap::Output3DWrapper*> &wraps);
-	void calcTGrads(FrameHessian* newFrameHessian);
 
 	int frameID;
 	bool fixAffine;
@@ -103,9 +126,11 @@ private:
 	Vec10f* JbBuffer;			// 0-7: sum(dd * dp). 8: sum(res*dd). 9: 1/(1+sum(dd*dd))=inverse hessian entry.
 	Vec10f* JbBuffer_new;
 
-	Accumulator9 acc9;
+	std::array<Accumulator11, NUM_THREADS> accE;
+	std::array<Accumulator9, NUM_THREADS> acc9s; // one acc for each worker thread.
 	Accumulator9 acc9SC;
 
+	IndexThreadReduce<double> reduce;
 
 	Vec3f dGrads[PYR_LEVELS];
 
