@@ -722,7 +722,6 @@ void CoarseInitializer::optReg(int lvl)
 	Pnt* ptsl = points[lvl];
 	if(!snapped)
 	{
-		for(int i=0;i<npts;i++) ptsl[i].iR = 1;
 		return;
 	}
 

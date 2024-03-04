@@ -26,6 +26,7 @@
 #pragma once
 
 #include "util/NumType.h"
+#include "util/IndexThreadReduce.h"
 #include "OptimizationBackend/MatrixAccumulators.h"
 #include "IOWrapper/Output3DWrapper.h"
 #include "util/settings.h"
