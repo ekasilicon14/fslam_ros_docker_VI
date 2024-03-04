@@ -1,3 +1,34 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+/*
+ * KFBuffer.cpp
+ *
+ *  Created on: Jan 7, 2014
+ *      Author: engelj
+ */
+
 #include "FullSystem/FullSystem.h"
  
 #include "stdio.h"
@@ -16,10 +47,9 @@
 
 namespace HSLAM
 {
-
-
 	void FullSystem::debugPlotTracking()
 	{
+		// Shows the points of each active frame in each active frame
 		if(disableAllDisplay) return;
 		if(!setting_render_plotTrackingFull) return;
 		int wh = hG[0]*wG[0];
@@ -155,6 +185,7 @@ namespace HSLAM
 
 			if((int)(freeDebugParam5+0.5f) == 0)
 			{
+				// Mode 0: points are coloured by depth, marginalized points are coloured by depth, outlier points are white
 				for(PointHessian* ph : frameHessians[f]->pointHessians)
 				{
 					if(ph==0) continue;
@@ -171,6 +202,7 @@ namespace HSLAM
 			}
 			else if((int)(freeDebugParam5+0.5f) == 1)
 			{
+				// Mode 1: points are coloured by depth, marginalized points are black, outlier points are white
 				for(PointHessian* ph : frameHessians[f]->pointHessians)
 				{
 					if(ph==0) continue;
@@ -186,9 +218,11 @@ namespace HSLAM
 			else if((int)(freeDebugParam5+0.5f) == 2)
 			{
 
+				// Mode 2: No points
 			}
 			else if((int)(freeDebugParam5+0.5f) == 3)
 			{
+				// Mode 3: Immature points are coloured by depth
 				for(ImmaturePoint* ph : frameHessians[f]->immaturePoints)
 				{
 					if(ph==0) continue;
@@ -207,26 +241,28 @@ namespace HSLAM
 			}
 			else if((int)(freeDebugParam5+0.5f) == 4)
 			{
+				// Mode 4: Immature points are coloured by type
 				for(ImmaturePoint* ph : frameHessians[f]->immaturePoints)
 				{
 					if(ph==0) continue;
 
 					if(ph->lastTraceStatus==ImmaturePointStatus::IPS_GOOD)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,255,0));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,255,0)); // Green
 					if(ph->lastTraceStatus==ImmaturePointStatus::IPS_OOB)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,0));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,0)); // Red (won't show because OOB)
 					if(ph->lastTraceStatus==ImmaturePointStatus::IPS_OUTLIER)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,0,255));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,0,255));	// Blue
 					if(ph->lastTraceStatus==ImmaturePointStatus::IPS_SKIPPED)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,255,0));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,255,0)); // Cyan
 					if(ph->lastTraceStatus==ImmaturePointStatus::IPS_BADCONDITION)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,255,255));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,255)); // Magenta
 					if(ph->lastTraceStatus==ImmaturePointStatus::IPS_UNINITIALIZED)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,0,0));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,255,255)); // Yellow
 				}
 			}
 			else if((int)(freeDebugParam5+0.5f) == 5)
 			{
+				// Mode 5: Immature points are coloured by energy quality
 				for(ImmaturePoint* ph : frameHessians[f]->immaturePoints)
 				{
 					if(ph==0) continue;
@@ -241,17 +277,18 @@ namespace HSLAM
 			}
 			else if((int)(freeDebugParam5+0.5f) == 6)
 			{
+				// Mode 6: Points are coloured by block level it was chosen at
 				for(PointHessian* ph : frameHessians[f]->pointHessians)
 				{
 					if(ph==0) continue;
 					if(ph->my_type==0)
 						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,255));
 					if(ph->my_type==1)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,0));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,255,0)); // Green
 					if(ph->my_type==2)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,0,255));
-					if(ph->my_type==3)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,255,255));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,0)); // Red
+					if(ph->my_type==4)
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,0,255)); // Blue
 				}
 				for(PointHessian* ph : frameHessians[f]->pointHessiansMarginalized)
 				{
@@ -259,16 +296,17 @@ namespace HSLAM
 					if(ph->my_type==0)
 						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,255));
 					if(ph->my_type==1)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,0));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,255,0)); // Green
 					if(ph->my_type==2)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,0,255));
-					if(ph->my_type==3)
-						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,255,255));
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(255,0,0)); // Red
+					if(ph->my_type==4)
+						img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, Vec3b(0,0,255)); // Blue
 				}
 
 			}
 			if((int)(freeDebugParam5+0.5f) == 7)
 			{
+				// Mode 7: Points are coloured by normalize depth, marginalized points are black
 				for(PointHessian* ph : frameHessians[f]->pointHessians)
 				{
 					img->setPixelCirc(ph->u+0.5f, ph->v+0.5f, makeJet3B((ph->idepth_scaled-minID) / ((maxID-minID))));
@@ -313,7 +351,7 @@ namespace HSLAM
 				}
 
 				char buf[1000];
-				snprintf(buf, 1000, "images_out/kf_%05d_%05d_%02d.png",
+				snprintf(buf, 1000, "images_out/kf_%05d_%05d_%02u.png",
 						frameHessians.back()->shell->id,  frameHessians.back()->frameID, f);
 				IOWrap::writeImage(buf,img);
 

@@ -1,3 +1,36 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+/*
+ * KFBuffer.cpp
+ *
+ *  Created on: Jan 7, 2014
+ *      Author: engelj
+ */
+
+
+
 #include "FullSystem/FullSystem.h"
  
 #include "stdio.h"
@@ -21,11 +54,22 @@
 
 #include "Indirect/Frame.h"
 
+
+
 namespace HSLAM
 {
 
 
-
+/**
+ * @brief Flags frames for marginalization
+ * 
+ * Conditions for marginalization:
+ * 1. Always keep latest keyframe
+ * 2. Marginalize if less than 5% of points are visable
+ * 3. If the frame window is full, marginalize the frame with a highest distance score
+ * 
+ * @param newFH 
+ */
 void FullSystem::flagFramesForMarginalization(FrameHessian* newFH)
 {
 	if(setting_minFrameAge > setting_maxFrames)
@@ -75,7 +119,9 @@ void FullSystem::flagFramesForMarginalization(FrameHessian* newFH)
 		}
 	}
 
-	// marginalize one.
+	// Marginalize one if active window size is too large
+	// Chose frame to be marginalized using the distance score
+	// The distance score tries to keep keyframes well distributed in 3D space
 	if((int)frameHessians.size()-flagged >= setting_maxFrames)
 	{
 		double smallestScore = 1;
@@ -88,6 +134,7 @@ void FullSystem::flagFramesForMarginalization(FrameHessian* newFH)
 			if(fh->frameID > latest->frameID-setting_minFrameAge || fh->frameID == 0) continue;
 			//if(fh==frameHessians.front() == 0) continue;
 
+			// Calculate distance score
 			double distScore = 0;
 			for(FrameFramePrecalc &ffh : fh->targetPrecalc)
 			{
@@ -120,6 +167,13 @@ void FullSystem::flagFramesForMarginalization(FrameHessian* newFH)
 
 
 
+/**
+ * @brief Marginalizes frame
+ * 
+ * Marginalizes the points in the frame and the frame itself
+ * 
+ * @param frame 
+ */
 void FullSystem::marginalizeFrame(FrameHessian* frame)
 {
 	// marginalize or remove all this frames points.
@@ -127,10 +181,11 @@ void FullSystem::marginalizeFrame(FrameHessian* frame)
 	assert((int)frame->pointHessians.size()==0);
 
 
+	// This actually does the marginalization math!!!
 	ef->marginalizeFrame(frame->efFrame);
 
-	// drop all observations of existing points in that frame.
-
+	// Marginalize all the points represented in the frame
+	// by dropping all observations of existing points in that frame
 	for(FrameHessian* fh : frameHessians)
 	{
 		if(fh==frame) continue;
@@ -163,13 +218,13 @@ void FullSystem::marginalizeFrame(FrameHessian* frame)
 
 
 
-    {
+    	{
         std::vector<FrameHessian*> v;
         v.push_back(frame);
-        for(IOWrap::Output3DWrapper* ow : outputWrapper)
+        for(IOWrap::Output3DWrapper* ow : outputWrapper){
             ow->publishKeyframes(v, true, &Hcalib);
-    }
-
+    	}
+	} 
 
 	frame->shell->marginalizedAt = frameHessians.back()->shell->id;
 	frame->shell->movedByOpt = frame->w2c_leftEps().norm();
