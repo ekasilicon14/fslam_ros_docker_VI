@@ -1,3 +1,35 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
+ * KFBuffer.cpp
+ *
+ *  Created on: Jan 7, 2014
+ *      Author: engelj
+ */
+
 #include "FullSystem/FullSystem.h"
  
 #include "stdio.h"
@@ -17,13 +49,27 @@ namespace HSLAM
 
 
 
+/**
+ * @brief Do optimization calculations for immature points that are being activated
+ * 
+ * For all of the active frames
+ * - Starts by calculating an optimized depth value
+ * - Checks the energy from the optimization to determine if the point should count as visible in a frame
+ * - Creates a PointHessian struct for the activated point and frame with the immature point values and new depth
+ * 
+ * @param point 			List of immature points that are to be optimized
+ * @param minObs 
+ * @param residuals 		Residual calculations
+ * @return PointHessian* 	Output array of activated points
+ */
 PointHessian* FullSystem::optimizeImmaturePoint(
 		ImmaturePoint* point, int minObs,
 		ImmaturePointTemporaryResidual* residuals)
 {
 	int nres = 0;
-	for(FrameHessian* fh : frameHessians)
+	for(FrameHessian* fh : frameHessians) // for all active frames
 	{
+		// Initialize variables for all connected frames
 		if(fh != point->host)
 		{
 			residuals[nres].state_NewEnergy = residuals[nres].state_energy = 0;
@@ -35,20 +81,19 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 	}
 	assert(nres == ((int)frameHessians.size())-1);
 
-	bool print = false;//rand()%50==0;
+	bool print = false;
 
 	float lastEnergy = 0;
 	float lastHdd=0;
 	float lastbd=0;
-	float currentIdepth=(point->idepth_max+point->idepth_min)*0.5f;
+	float currentIdepth=(point->idepth_max+point->idepth_min)*0.5f; // Initial depth from immature point
 
 
 
-
-
-
+	// Initial calculations
 	for(int i=0;i<nres;i++)
 	{
+		// Calculate residual of immature point for all connected frames
 		lastEnergy += point->linearizeResidual(&Hcalib, 1000, residuals+i,lastHdd, lastbd, currentIdepth);
 		residuals[i].state_state = residuals[i].state_NewState;
 		residuals[i].state_energy = residuals[i].state_NewEnergy;
@@ -65,6 +110,7 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 	if(print) printf("Activate point. %d residuals. H=%f. Initial Energy: %f. Initial Id=%f\n" ,
 			nres, lastHdd,lastEnergy,currentIdepth);
 
+	// Optimize new values (depth) for activated point
 	float lambda = 0.1;
 	for(int iteration=0;iteration<setting_GNItsOnPointActivation;iteration++)
 	{
@@ -93,7 +139,7 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 				"",
 				lastEnergy, newEnergy, newIdepth);
 
-		if(newEnergy < lastEnergy)
+		if(newEnergy < lastEnergy) // use new values and increase step
 		{
 			currentIdepth = newIdepth;
 			lastHdd = newHdd;
@@ -107,7 +153,7 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 
 			lambda *= 0.5;
 		}
-		else
+		else // decrease step
 		{
 			lambda *= 5;
 		}
@@ -130,11 +176,12 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 	if(numGoodRes < minObs)
 	{
 		if(print) printf("OptPoint: OUTLIER!\n");
-		return (PointHessian*)((long)(-1));		// yeah I'm like 99% sure this is OK on 32bit systems.
+		return (PointHessian*)((long)(-1));		// 99% sure this is OK on 32bit systems.
 	}
 
 
 
+	// Set new PointHessian and PointFrameResidual structs for activated points
 	PointHessian* p = new PointHessian(point, &Hcalib);
 	if(!std::isfinite(p->energyTH)) {delete p; return (PointHessian*)((long)(-1));}
 
@@ -146,6 +193,7 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 	p->setIdepth(currentIdepth);
 	p->setPointStatus(PointHessian::ACTIVE);
 
+	// Do all of the required optimization calculations for the new points
 	for(int i=0;i<nres;i++)
 		if(residuals[i].state_state == ResState::IN)
 		{
@@ -167,7 +215,7 @@ PointHessian* FullSystem::optimizeImmaturePoint(
 			}
 		}
 
-	if(print) printf("point activated!\n");
+	if(print) printf("Point activated!\n");
 
 	statistics_numActivatedPoints++;
 	return p;

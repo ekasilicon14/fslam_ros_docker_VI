@@ -1,6 +1,8 @@
 /**
-* This file is part of DSO.
-* 
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
 * Copyright 2016 Technical University of Munich and Intel.
 * Developed by Jakob Engel <engelj at in dot tum dot de>,
 * for more information see <http://vision.in.tum.de/dso>.
@@ -20,6 +22,7 @@
 * You should have received a copy of the GNU General Public License
 * along with DSO. If not, see <http://www.gnu.org/licenses/>.
 */
+
 
 
 #pragma once
@@ -45,6 +48,13 @@ using namespace HSLAM;
 
 
 
+/**
+ * @brief Gets the files from the given directory in alphabetical order
+ * 
+ * @param dir 		Input directory
+ * @param files 	Vector of file paths
+ * @return int 		-1 if funaction failed. Otherwise, return number of files
+ */
 inline int getdir (std::string dir, std::vector<std::string> &files)
 {
     DIR *dp;
@@ -63,6 +73,7 @@ inline int getdir (std::string dir, std::vector<std::string> &files)
     closedir(dp);
 
 
+	// files are sorted alphabetically
     std::sort(files.begin(), files.end());
 
     if(dir.at( dir.length() - 1 ) != '/') dir = dir+"/";
@@ -99,9 +110,22 @@ struct PrepImageItem
 
 
 
+/**
+ * @brief Handles the inputting of images into the full system
+ * 
+ */
 class ImageFolderReader
 {
 public:
+	/**
+	 * @brief Construct a new Image Folder Reader object
+	 * 
+	 * @param path 				Path to video files
+	 * @param calibFile 		Path to calibration file
+	 * @param gammaFile 		Path to photometric gamma correction file
+	 * @param vignetteFile 		Path to photometric vignette correction file
+	 * @param use16BitPassed 	16 or 8 bit images
+	 */
 	ImageFolderReader(std::string path, std::string calibFile, std::string gammaFile, std::string vignetteFile)
 	{
 		this->path = path;
@@ -159,11 +183,15 @@ public:
 		height=undistort->getSize()[1];
 
 
-		// load timestamps if possible.
+		// Load timestamps if possible.
 		loadTimestamps();
 		printf("ImageFolderReader: got %d files in %s!\n", (int)files.size(), path.c_str());
 
 	}
+	/**
+	 * @brief Destroy the Image Folder Reader object
+	 * 
+	 */
 	~ImageFolderReader()
 	{
 #if HAS_ZIPLIB
@@ -175,10 +203,20 @@ public:
 		delete undistort;
 	};
 
+	/**
+	 * @brief Get the Original Calib object
+	 * 
+	 * @return Eigen::VectorXf 
+	 */
 	Eigen::VectorXf getOriginalCalib()
 	{
 		return undistort->getOriginalParameter().cast<float>();
 	}
+	/**
+	 * @brief Get the Original Dimensions object
+	 * 
+	 * @return Eigen::Vector2i 
+	 */
 	Eigen::Vector2i getOriginalDimensions()
 	{
 		return  undistort->getOriginalSize();
@@ -191,6 +229,12 @@ public:
 		h = undistort->getSize()[1];
 	}
 
+	/**
+	 * @brief Set the Global Calibration object
+	 * 
+	 * Wrapper for getCalibMono and setGlobalCalib
+	 * 
+	 */
 	void setGlobalCalibration()
 	{
 		int w_out, h_out;
@@ -199,6 +243,11 @@ public:
 		setGlobalCalib(w_out, h_out, K);
 	}
 
+	/**
+	 * @brief Get the number of images
+	 * 
+	 * @return int 
+	 */
 	int getNumImages()
 	{
 		return files.size();
@@ -214,6 +263,12 @@ public:
 		return undistort->getSize()[1];
 	}
 
+	/**
+	 * @brief Get the timestamp of the frame with the id
+	 * 
+	 * @param id 
+	 * @return double 
+	 */
 	double getTimestamp(int id)
 	{
 		if(timestamps.size()==0) return id*0.04f; //0.1f = 10 Hz
@@ -222,6 +277,16 @@ public:
 		return timestamps[id];
 	}
 
+	/**
+	 * @brief Get the Filename object
+	 * 
+	 * @param id 
+	 * @return std::string 
+	 */
+    std::string getFilename(int id)
+    {
+        return files[id];
+    }
 
 	void prepImage(int id, bool as8U=false)
 	{
@@ -229,17 +294,39 @@ public:
 	}
 
 
+	/**
+	 * @brief Wrapper function for getImageRaw_internal
+	 * 
+	 * Returns as MinimalImage<unsigned char> pointer
+	 * 
+	 * @param id 
+	 * @return MinimalImageB* 
+	 */
 	MinimalImageB* getImageRaw(int id)
 	{
 			return getImageRaw_internal(id,0);
 	}
 
+	/**
+	 * @brief Wrapper function for getImageRaw_internal
+	 * 
+	 * Returns as ImageAndExposure pointer
+	 * 
+	 * @param id 
+	 * @param forceLoadDirectly 
+	 * @return ImageAndExposure* 
+	 */
 	ImageAndExposure* getImage(int id, bool forceLoadDirectly=false)
 	{
 		return getImage_internal(id, 0);
 	}
 
 
+	/**
+	 * @brief Get the photometric gamma array
+	 * 
+	 * @return float* 
+	 */
 	inline float* getPhotometricGamma()
 	{
 		if(undistort==0 || undistort->photometricUndist==0) return 0;
@@ -251,7 +338,16 @@ public:
 	Undistort* undistort;
 private:
 
-
+	/**
+	 * @brief Reads image
+	 * 
+	 * Either uses the provided image reader from the IOWrapper or extracts a zip file
+	 * No timestamp or exposure is provided
+	 * 
+	 * @param id 
+	 * @param unused 
+	 * @return MinimalImageB* 
+	 */
 	MinimalImageB* getImageRaw_internal(int id, int unused)
 	{
 		if(!isZipped)
@@ -290,6 +386,16 @@ private:
 	}
 
 
+	/**
+	 * @brief Reads image with exposure
+	 * 
+	 * Uses the provided 16 or b bit image reader from the IOWrapper
+	 * Also gives the exposure and timestamp of the image to the ImageAndExposure object
+	 * 
+	 * @param id 
+	 * @param unused 
+	 * @return ImageAndExposure* 
+	 */
 	ImageAndExposure* getImage_internal(int id, int unused)
 	{
 		MinimalImageB* minimg = getImageRaw_internal(id, 0);
@@ -301,6 +407,12 @@ private:
 		return ret2;
 	}
 
+	/**
+	 * @brief Loads the timestamps
+	 * 
+	 * Will also load exposures if provided
+	 * 
+	 */
 	inline void loadTimestamps()
 	{
 		std::ifstream tr;
@@ -312,25 +424,27 @@ private:
 			char buf[1000];
 			tr.getline(buf, 1000);
 
-			int id;
+			long long id;
 			double stamp;
 			float exposure = 0;
 
-			if(3 == sscanf(buf, "%d %lf %f", &id, &stamp, &exposure))
+			if(3 == sscanf(buf, "%lld %lf %f", &id, &stamp, &exposure))
 			{
+                ids.push_back(id);
 				timestamps.push_back(stamp);
 				exposures.push_back(exposure);
 			}
 
-			else if(2 == sscanf(buf, "%d %lf", &id, &stamp))
+			else if(2 == sscanf(buf, "%lld %lf", &id, &stamp))
 			{
+                ids.push_back(id);
 				timestamps.push_back(stamp);
 				exposures.push_back(exposure);
 			}
 		}
 		tr.close();
 
-		// check if exposures are correct, (possibly skip)
+		// Check if exposures are correct, (possibly skip)
 		bool exposuresGood = ((int)exposures.size()==(int)getNumImages()) ;
 		for(int i=0;i<(int)exposures.size();i++)
 		{
@@ -367,7 +481,7 @@ private:
 
 
 
-
+	std::vector<long long> ids; // Saves the ids that are used by e.g. the EuRoC dataset.
 	std::vector<ImageAndExposure*> preloadedImages;
 	std::vector<std::string> files;
 	std::vector<double> timestamps;

@@ -40,7 +40,7 @@ public:
 	T* data;
 
 	/*
-	 * creates minimal image with own memory
+	 * Creates minimal image with own memory
 	 */
 	inline MinimalImage(int w_, int h_) : w(w_), h(h_)
 	{
@@ -49,7 +49,7 @@ public:
 	}
 
 	/*
-	 * creates minimal image wrapping around existing memory
+	 * Creates minimal image wrapping around existing memory
 	 */
 	inline MinimalImage(int w_, int h_, T* data_) : w(w_), h(h_)
 	{
@@ -152,7 +152,7 @@ public:
 
 
 
-private:
+protected:
 	bool ownData;
 };
 

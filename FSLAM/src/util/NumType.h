@@ -170,7 +170,9 @@ struct AffLight
 	AffLight() : a(0), b(0) {};
 
 	// Affine Parameters:
-	double a,b;	// I_frame = exp(a)*I_global + b. // I_global = exp(-a)*(I_frame - b).
+	// I_frame = exp(a)*I_global + b
+	// I_global = exp(-a)*(I_frame - b)
+	double a,b;
 
 	static Vec2 fromToVecExposure(float exposureF, float exposureT, AffLight g2F, AffLight g2T)
 	{

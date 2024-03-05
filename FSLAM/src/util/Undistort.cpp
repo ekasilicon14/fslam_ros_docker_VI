@@ -1,3 +1,29 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
 #include <sstream>
 #include <fstream>
 #include <iostream>
@@ -15,13 +41,18 @@
 namespace HSLAM
 {
 
-
-
-
-
-
-
-
+/**
+ * @brief Construct a new Photometric Undistorter:: Photometric Undistorter object
+ * 
+ * Corrects the pixel brightness of the camera
+ * A vignette image and gamma correction file are required
+ * 
+ * @param file 
+ * @param noiseImage 
+ * @param vignetteImage 
+ * @param w_ 
+ * @param h_ 
+ */
 PhotometricUndistorter::PhotometricUndistorter(
 		std::string file,
 		std::string noiseImage,
@@ -41,7 +72,7 @@ PhotometricUndistorter::PhotometricUndistorter(
 	}
 
 
-	// read G.
+	// Read G
 	std::ifstream f(file.c_str());
 	printf("Reading Photometric Calibration from file %s\n",file.c_str());
 	if (!f.good())
@@ -50,15 +81,13 @@ PhotometricUndistorter::PhotometricUndistorter(
 		return;
 	}
 
-
-
+	// Gamma Correction
+	// Remaps luminance values to their correct values
 	{
 		std::string line;
 		std::getline( f, line );
 		std::istringstream l1i( line );
 		std::vector<float> Gvec = std::vector<float>( std::istream_iterator<float>(l1i), std::istream_iterator<float>() );
-
-
 
         GDepth = Gvec.size();
 
@@ -85,6 +114,7 @@ PhotometricUndistorter::PhotometricUndistorter(
         for(int i=0;i<GDepth;i++) G[i] = 255.0 * (G[i] - min) / (max-min);			// make it to 0..255 => 0..255.
 	}
 
+	// If no photometric calibration, set the gamma map to a linear correspondance
 	if(setting_photometricCalibration==0)
 	{
         for(int i=0;i<GDepth;i++) G[i]=255.0f*i/(float)(GDepth-1);

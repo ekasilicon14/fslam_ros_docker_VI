@@ -1,3 +1,34 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+/*
+ * KFBuffer.cpp
+ *
+ *  Created on: Jan 7, 2014
+ *      Author: engelj
+ */
+
 #include "FullSystem/FullSystem.h"
  
 #include "stdio.h"
@@ -27,6 +58,13 @@ PointFrameResidual::PointFrameResidual(){assert(false); instanceCounter++;}
 
 PointFrameResidual::~PointFrameResidual(){assert(efResidual==0); instanceCounter--; delete J;}
 
+/**
+ * @brief Construct a new Point Frame Residual
+ * 
+ * @param point_ 
+ * @param host_ 
+ * @param target_ 
+ */
 PointFrameResidual::PointFrameResidual(PointHessian* point_, FrameHessian* host_, FrameHessian* target_) :
 	point(point_),
 	host(host_),
@@ -44,6 +82,14 @@ PointFrameResidual::PointFrameResidual(PointHessian* point_, FrameHessian* host_
 
 
 
+/**
+ * @brief Linearize point
+ * 
+ * Calculates the residual and Jacobians of the point
+ * 
+ * @param HCalib 
+ * @return double 
+ */
 double PointFrameResidual::linearize(CalibHessian* HCalib)
 {
 	state_NewEnergyWithOutlier=-1;
@@ -53,15 +99,20 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 	FrameFramePrecalc* precalc = &(host->targetPrecalc[target->idx]);
 	float energyLeft=0;
+	// Get image
 	const Eigen::Vector3f* dIl = target->dI;
 	//const float* const Il = target->I;
-	const Mat33f &PRE_KRKiTll = precalc->PRE_KRKiTll;
-	const Vec3f &PRE_KtTll = precalc->PRE_KtTll;
-	const Mat33f &PRE_RTll_0 = precalc->PRE_RTll_0;
-	const Vec3f &PRE_tTll_0 = precalc->PRE_tTll_0;
+	// Get K matrix and transforms from the pre-calculation
+	// K matrix and Transformation matrix are multiplied here for effciency
+	const Mat33f &PRE_KRKiTll = precalc->PRE_KRKiTll; 	// K * rotationMatrix * K^-1
+	const Vec3f &PRE_KtTll = precalc->PRE_KtTll; 		// K * translationMatrix
+	const Mat33f &PRE_RTll_0 = precalc->PRE_RTll_0; 	// rotationMatrix
+	const Vec3f &PRE_tTll_0 = precalc->PRE_tTll_0; 		// translationMatrix
+	// Get info about point
 	const float * const color = point->color;
 	const float * const weights = point->weights;
 
+	// Photogrammetric values
 	Vec2f affLL = precalc->PRE_aff_mode;
 	float b0 = precalc->PRE_b0_mode;
 
@@ -69,35 +120,46 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 	Vec6f d_xi_x, d_xi_y;
 	Vec4f d_C_x, d_C_y;
 	float d_d_x, d_d_y;
+	// Calculate the geometric residual for the point
 	{
 		float drescale, u, v, new_idepth;
 		float Ku, Kv;
 		Vec3f KliP;
 
+		// Project point from 3D to 2D
+		// We only project the middle point because all the pixels
+		// in a pattern share the same geometric residual
+
+		// The calibration and transformation matrices are applied by the projection
 		if(!projectPoint(point->u, point->v, point->idepth_zero_scaled, 0, 0,HCalib,
 				PRE_RTll_0,PRE_tTll_0, drescale, u, v, Ku, Kv, KliP, new_idepth))
 			{ state_NewState = ResState::OOB; return state_energy; }
 
+		// Get the new coordinates
 		centerProjectedTo = Vec3f(Ku, Kv, new_idepth);
 
+		// Calculate the values of d_point'/d_J_geometric
+		// These are evaluated using First Estimate Jacobians
+		// therefore they are evaluated at x=0 instead of the point position
 
-		// diff d_idepth
+		// Partial differential of d_Ku/d_idepth
 		d_d_x = drescale * (PRE_tTll_0[0]-PRE_tTll_0[2]*u)*SCALE_IDEPTH*HCalib->fxl();
+		// Partial differential of d_Kv/d_idepth
 		d_d_y = drescale * (PRE_tTll_0[1]-PRE_tTll_0[2]*v)*SCALE_IDEPTH*HCalib->fyl();
 
 
 
 
-		// diff calib
-		d_C_x[2] = drescale*(PRE_RTll_0(2,0)*u-PRE_RTll_0(0,0));
-		d_C_x[3] = HCalib->fxl() * drescale*(PRE_RTll_0(2,1)*u-PRE_RTll_0(0,1)) * HCalib->fyli();
-		d_C_x[0] = KliP[0]*d_C_x[2];
-		d_C_x[1] = KliP[1]*d_C_x[3];
+		// Partial differential of calib matrix
+		d_C_x[2] = drescale*(PRE_RTll_0(2,0)*u-PRE_RTll_0(0,0)); //d_Ku/d_c_x
+		d_C_x[3] = HCalib->fxl() * drescale*(PRE_RTll_0(2,1)*u-PRE_RTll_0(0,1)) * HCalib->fyli(); //d_Ku/d_c_y
+		d_C_x[0] = KliP[0]*d_C_x[2]; //d_Ku/d_f_x
+		d_C_x[1] = KliP[1]*d_C_x[3]; //d_Ku/d_f_y
 
-		d_C_y[2] = HCalib->fyl() * drescale*(PRE_RTll_0(2,0)*v-PRE_RTll_0(1,0)) * HCalib->fxli();
-		d_C_y[3] = drescale*(PRE_RTll_0(2,1)*v-PRE_RTll_0(1,1));
-		d_C_y[0] = KliP[0]*d_C_y[2];
-		d_C_y[1] = KliP[1]*d_C_y[3];
+		d_C_y[2] = HCalib->fyl() * drescale*(PRE_RTll_0(2,0)*v-PRE_RTll_0(1,0)) * HCalib->fxli(); //d_Kv/d_c_x
+		d_C_y[3] = drescale*(PRE_RTll_0(2,1)*v-PRE_RTll_0(1,1)); //d_Kv/d_c_y
+		d_C_y[0] = KliP[0]*d_C_y[2]; //d_Kv/d_f_x
+		d_C_y[1] = KliP[1]*d_C_y[3]; //d_Kv/d_f_y
 
 		d_C_x[0] = (d_C_x[0]+u)*SCALE_F;
 		d_C_x[1] *= SCALE_F;
@@ -110,16 +172,21 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		d_C_y[3] = (d_C_y[3]+1)*SCALE_C;
 
 
-		d_xi_x[0] = new_idepth*HCalib->fxl();
-		d_xi_x[1] = 0;
-		d_xi_x[2] = -new_idepth*u*HCalib->fxl();
+		// Partial differential of transformations
+		// Translation
+		d_xi_x[0] = new_idepth*HCalib->fxl(); //d_Ku/d_d_x
+		d_xi_x[1] = 0; //d_Ku/d_d_y
+		d_xi_x[2] = -new_idepth*u*HCalib->fxl(); //d_Ku/d_d_z
+		// Rotation (three lie algebra variables)
 		d_xi_x[3] = -u*v*HCalib->fxl();
 		d_xi_x[4] = (1+u*u)*HCalib->fxl();
 		d_xi_x[5] = -v*HCalib->fxl();
 
-		d_xi_y[0] = 0;
-		d_xi_y[1] = new_idepth*HCalib->fyl();
-		d_xi_y[2] = -new_idepth*v*HCalib->fyl();
+		// Translation
+		d_xi_y[0] = 0; //d_Ku/d_d_x
+		d_xi_y[1] = new_idepth*HCalib->fyl(); //d_Ku/d_d_y
+		d_xi_y[2] = -new_idepth*v*HCalib->fyl(); //d_Ku/d_d_z
+		// Rotation (three lie algebra variables)
 		d_xi_y[3] = -(1+v*v)*HCalib->fyl();
 		d_xi_y[4] = u*v*HCalib->fyl();
 		d_xi_y[5] = u*HCalib->fyl();
@@ -127,6 +194,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 
 	{
+		// Set the values of the Jacobian matrix
 		J->Jpdxi[0] = d_xi_x;
 		J->Jpdxi[1] = d_xi_y;
 
@@ -143,6 +211,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 
 
+	// Calculate the projective and image residual for the pattern
 	float JIdxJIdx_00=0, JIdxJIdx_11=0, JIdxJIdx_10=0;
 	float JabJIdx_00=0, JabJIdx_01=0, JabJIdx_10=0, JabJIdx_11=0;
 	float JabJab_00=0, JabJab_01=0, JabJab_11=0;
@@ -160,6 +229,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 
         Vec3f hitColor = (getInterpolatedElement33(dIl, Ku, Kv, wG[0]));
+		// Calculate residual
         float residual = hitColor[0] - (float)(affLL[0] * color[idx] + affLL[1]);
 
 
@@ -169,18 +239,25 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		{ state_NewState = ResState::OOB; return state_energy; }
 
 
+		// Adjust residual
+		// Apply gradient-dependent weighting
 		float w = sqrtf(setting_outlierTHSumComponent / (setting_outlierTHSumComponent + hitColor.tail<2>().squaredNorm()));
         w = 0.5f*(w + weights[idx]);
 
 
 
+		// Huber weight
 		float hw = fabsf(residual) < setting_huberTH ? 1 : setting_huberTH / fabsf(residual);
+		// Use Huber Norm
+		// hw*(2-hw)*residual*residual results in Huber loss for the residual
 		energyLeft += w*w*hw *residual*residual*(2-hw);
 
 		{
+			// Calculate Jacobian of image variables
 			if(hw < 1) hw = sqrtf(hw);
 			hw = hw*w;
 
+			// Pixel derivatives
 			hitColor[1]*=hw;
 			hitColor[2]*=hw;
 
@@ -188,9 +265,11 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 
 			J->JIdx[0][idx] = hitColor[1];
 			J->JIdx[1][idx] = hitColor[2];
+			// Calculate Jacobian of photometric variables
 			J->JabF[0][idx] = drdA*hw;
 			J->JabF[1][idx] = hw;
 
+			// Pre-calculate values for effciency
 			JIdxJIdx_00+=hitColor[1]*hitColor[1];
 			JIdxJIdx_11+=hitColor[2]*hitColor[2];
 			JIdxJIdx_10+=hitColor[1]*hitColor[2];
@@ -213,6 +292,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 		}
 	}
 
+	// Set pre-calculated values
 	J->JIdx2(0,0) = JIdxJIdx_00;
 	J->JIdx2(0,1) = JIdxJIdx_10;
 	J->JIdx2(1,0) = JIdxJIdx_10;
@@ -227,7 +307,7 @@ double PointFrameResidual::linearize(CalibHessian* HCalib)
 	J->Jab2(1,1) = JabJab_11;
 
 	state_NewEnergyWithOutlier = energyLeft;
-
+	// Check if point is outlier
 	if(energyLeft > std::max<float>(host->frameEnergyTH, target->frameEnergyTH) || wJI2_sum < 2)
 	{
 		energyLeft = std::max<float>(host->frameEnergyTH, target->frameEnergyTH);
@@ -272,6 +352,11 @@ void PointFrameResidual::debugPlot()
 
 
 
+/**
+ * @brief Set the state and energy to the new values
+ * 
+ * @param copyJacobians 
+ */
 void PointFrameResidual::applyRes(bool copyJacobians)
 {
 	if(copyJacobians)

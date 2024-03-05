@@ -1,3 +1,29 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
 #include "FullSystem/FullSystem.h"
  
 #include "stdio.h"
@@ -25,11 +51,24 @@ namespace HSLAM
 
 
 
+/**
+ * @brief Actually linearizes all activeResiduals
+ * 
+ * Assists linearizeAll
+ * 
+ * @param fixLinearization 
+ * @param toRemove 
+ * @param min 
+ * @param max 
+ * @param stats 
+ * @param tid 
+ */
 void FullSystem::linearizeAll_Reductor(bool fixLinearization, std::vector<PointFrameResidual*>* toRemove, int min, int max, Vec10* stats, int tid)
 {
 	for(int k=min;k<max;k++)
 	{
 		PointFrameResidual* r = activeResiduals[k];
+		// The linearization is done by the residual class here!!!
 		(*stats)[0] += r->linearize(&Hcalib);
 
 		if(fixLinearization)
@@ -61,11 +100,24 @@ void FullSystem::linearizeAll_Reductor(bool fixLinearization, std::vector<PointF
 }
 
 
+/**
+ * @brief Makes all of the active residuals set their new states
+ * 
+ * @param copyJacobians 
+ * @param min 
+ * @param max 
+ * @param stats 
+ * @param tid 
+ */
 void FullSystem::applyRes_Reductor(bool copyJacobians, int min, int max, Vec10* stats, int tid)
 {
 	for(int k=min;k<max;k++)
 		activeResiduals[k]->applyRes(true);
 }
+/**
+ * @brief Sets new frame energy threshold
+ * 
+ */
 void FullSystem::setNewFrameEnergyTH()
 {
 
@@ -81,10 +133,10 @@ void FullSystem::setNewFrameEnergyTH()
 
 		}
 
-	if(allResVec.size()==0)
+	if(allResVec.size()==0) // should never happen, but lets make sure
 	{
 		newFrame->frameEnergyTH = 12*12*PATTERNNUM;
-		return;		// should never happen, but lets make sure.
+		return;
 	}
 
 
@@ -115,6 +167,14 @@ void FullSystem::setNewFrameEnergyTH()
 //			meanElement, nthElement, sqrtf(newFrame->frameEnergyTH),
 //			good, bad);
 }
+/**
+ * @brief Linearizes all activeResiduals and other steps
+ * 
+ * Assists optimize
+ * 
+ * @param fixLinearization 
+ * @return Vec3 
+ */
 Vec3 FullSystem::linearizeAll(bool fixLinearization)
 {
 	double lastEnergyP = 0;
@@ -125,6 +185,7 @@ Vec3 FullSystem::linearizeAll(bool fixLinearization)
 	std::vector<PointFrameResidual*> toRemove[NUM_THREADS];
 	for(int i=0;i<NUM_THREADS;i++) toRemove[i].clear();
 
+	// Linearize all of the residuals
 	if(multiThreading)
 	{
 		treadReduce.reduce(boost::bind(&FullSystem::linearizeAll_Reductor, this, fixLinearization, toRemove, _1, _2, _3, _4), 0, activeResiduals.size(), 0);
@@ -138,6 +199,7 @@ Vec3 FullSystem::linearizeAll(bool fixLinearization)
 	}
 
 
+	// Set new frame energy threshold
 	setNewFrameEnergyTH();
 
 
@@ -156,6 +218,7 @@ Vec3 FullSystem::linearizeAll(bool fixLinearization)
 
 		}
 
+		// Remove residuals
 		int nResRemoved=0;
 		for(int i=0;i<NUM_THREADS;i++)
 		{
@@ -188,7 +251,19 @@ Vec3 FullSystem::linearizeAll(bool fixLinearization)
 
 
 
-// applies step to linearization point.
+/**
+ * @brief Does step from backup
+ * 
+ * Applies step to linearization point
+ * 
+ * @param stepfacC 
+ * @param stepfacT 
+ * @param stepfacR 
+ * @param stepfacA 
+ * @param stepfacD 
+ * @return true 
+ * @return false 
+ */
 bool FullSystem::doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,float stepfacA,float stepfacD)
 {
 //	float meanStepC=0,meanStepP=0,meanStepD=0;
@@ -220,13 +295,13 @@ bool FullSystem::doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,f
 
 			for(PointHessian* ph : fh->pointHessians)
 			{
-				float step = ph->step+0.5f*(ph->step_backup);
-				ph->setIdepth(ph->idepth_backup + step);
-				sumID += step*step;
+				float step_ph = ph->step+0.5f*(ph->step_backup);
+				ph->setIdepth(ph->idepth_backup + step_ph);
+				sumID += step_ph*step_ph;
 				sumNID += fabsf(ph->idepth_backup);
 				numID++;
 
-                ph->setIdepthZero(ph->idepth_backup + step);
+                ph->setIdepthZero(ph->idepth_backup + step_ph);
 			}
 		}
 	}
@@ -287,6 +362,11 @@ bool FullSystem::doStepFromBackup(float stepfacC,float stepfacT,float stepfacR,f
 
 
 // sets linearization point.
+/**
+ * @brief Set up backup state if the optimization goes too far
+ * 
+ * @param backupLastStep 
+ */
 void FullSystem::backupState(bool backupLastStep)
 {
 	if(setting_solverMode & SOLVER_MOMENTUM)
@@ -335,6 +415,10 @@ void FullSystem::backupState(bool backupLastStep)
 }
 
 // sets linearization point.
+/**
+ * @brief Loads backup values
+ * 
+ */
 void FullSystem::loadSateBackup()
 {
 	Hcalib.setValue(Hcalib.value_backup);
@@ -355,7 +439,12 @@ void FullSystem::loadSateBackup()
 	setPrecalcValues();
 }
 
-
+/**
+ * @brief Wrapper for calcMEnergyF
+ * 
+ * @param useNewValues 
+ * @return double 
+ */
 double FullSystem::calcMEnergy()
 {
 	if(setting_forceAceptStep) return 0;
@@ -381,6 +470,14 @@ void FullSystem::printOptRes(const Vec3 &res, double resL, double resM, double r
 }
 
 
+/**
+ * @brief Optimizes the window
+ * 
+ * Main function for full optimization
+ * 
+ * @param mnumOptIts 
+ * @return float 
+ */
 float FullSystem::optimize(int mnumOptIts)
 {
 
@@ -398,9 +495,11 @@ float FullSystem::optimize(int mnumOptIts)
 	activeResiduals.clear();
 	int numPoints = 0;
 	int numLRes = 0;
+	// for all points in active frames
 	for(FrameHessian* fh : frameHessians)
 		for(PointHessian* ph : fh->pointHessians)
 		{
+			// for all frames the point is visible in
 			for(PointFrameResidual* r : ph->residuals)
 			{
 				if(!r->efResidual->isLinearized)
@@ -418,6 +517,8 @@ float FullSystem::optimize(int mnumOptIts)
         printf("OPTIMIZE %d pts, %d active res, %d lin res!\n",ef->nPoints,(int)activeResiduals.size(), numLRes);
 
 
+	// Initial calculation
+	// Do optimization process
 	Vec3 lastEnergy = linearizeAll(false);
 	double lastEnergyL = calcLEnergy();
 	double lastEnergyM = calcMEnergy();
@@ -426,6 +527,7 @@ float FullSystem::optimize(int mnumOptIts)
 
 
 
+	// Set new states
 	if(multiThreading)
 		treadReduce.reduce(boost::bind(&FullSystem::applyRes_Reductor, this, true, _1, _2, _3, _4), 0, activeResiduals.size(), 50);
 	else
@@ -445,12 +547,16 @@ float FullSystem::optimize(int mnumOptIts)
 	double lambda = 1e-1;
 	float stepsize=1;
 	VecX previousX = VecX::Constant(CPARS+ 8*frameHessians.size(), NAN);
+	// Iterative optimization process
 	for(int iteration=0;iteration<mnumOptIts;iteration++)
 	{
 		// solve!
 		backupState(iteration!=0);
+
+		// Solves the Hessian
 		//solveSystemNew(0);
 		solveSystem(iteration, lambda);
+		// Increment optimization
 		double incDirChange = (1e-20 + previousX.dot(ef->lastX)) / (1e-20 + previousX.norm() * ef->lastX.norm());
 		previousX = ef->lastX;
 
@@ -465,6 +571,7 @@ float FullSystem::optimize(int mnumOptIts)
 			if(stepsize <0.25) stepsize=0.25;
 		}
 
+		// Check if the optimization is good enough to stop
 		bool canbreak = doStepFromBackup(stepsize,stepsize,stepsize,stepsize,stepsize);
 
 
@@ -473,7 +580,8 @@ float FullSystem::optimize(int mnumOptIts)
 
 
 
-		// eval new energy!
+		// Eval new energy!
+		// Do optimization process
 		Vec3 newEnergy = linearizeAll(false);
 		double newEnergyL = calcLEnergy();
 		double newEnergyM = calcMEnergy();
@@ -508,9 +616,10 @@ float FullSystem::optimize(int mnumOptIts)
 
 			lambda *= 0.25;
 		}
-		else
+		else // Undo step
 		{
 			loadSateBackup();
+			// Do optimization process
 			lastEnergy = linearizeAll(false);
 			lastEnergyL = calcLEnergy();
 			lastEnergyM = calcMEnergy();
@@ -561,10 +670,12 @@ float FullSystem::optimize(int mnumOptIts)
 
 	{
 		// boost::unique_lock<boost::mutex> crlock(shellPoseMutex);
+		// Set new poses
 		for(FrameHessian* fh : frameHessians)
 		{
 			// fh->shell->setPose(fh->PRE_camToWorld);
 			// fh->shell->setPoseOpti(Sim3(fh->shell->getPoseInverse().matrix()));
+			
 			fh->shell->setPoseOpti(Sim3(fh->PRE_camToWorld.inverse().matrix()));
 
 			fh->shell->aff_g2l = fh->aff_g2l();
@@ -599,6 +710,12 @@ float FullSystem::optimize(int mnumOptIts)
 
 
 
+/**
+ * @brief Wrapper for solveSystemF
+ * 
+ * @param iteration 
+ * @param lambda 
+ */
 void FullSystem::solveSystem(int iteration, double lambda)
 {
 	ef->lastNullspaces_forLogging = getNullspaces(
@@ -612,6 +729,11 @@ void FullSystem::solveSystem(int iteration, double lambda)
 
 
 
+/**
+ * @brief Wrapper for calcLEnergyF_MT
+ * 
+ * @return double 
+ */
 double FullSystem::calcLEnergy()
 {
 	if(setting_forceAceptStep) return 0;
@@ -622,6 +744,10 @@ double FullSystem::calcLEnergy()
 }
 
 
+/**
+ * @brief Removes outliers
+ * 
+ */
 void FullSystem::removeOutliers()
 {
 	int numPointsDropped=0;
@@ -651,6 +777,15 @@ void FullSystem::removeOutliers()
 
 
 
+/**
+ * @brief Get nullspaces
+ * 
+ * @param nullspaces_pose 
+ * @param nullspaces_scale 
+ * @param nullspaces_affA 
+ * @param nullspaces_affB 
+ * @return std::vector<VecX> 
+ */
 std::vector<VecX> FullSystem::getNullspaces(
 		std::vector<VecX> &nullspaces_pose,
 		std::vector<VecX> &nullspaces_scale,
