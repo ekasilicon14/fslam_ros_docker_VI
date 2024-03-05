@@ -222,6 +222,13 @@ public:
 		return  undistort->getOriginalSize();
 	}
 
+	/**
+	 * @brief Get the Calib Mono object
+	 * 
+	 * @param K 	K matrix of camera
+	 * @param w 	width
+	 * @param h 	height
+	 */
 	void getCalibMono(Eigen::Matrix3f &K, int &w, int &h)
 	{
 		K = undistort->getK().cast<float>();

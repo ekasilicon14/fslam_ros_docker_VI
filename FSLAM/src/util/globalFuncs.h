@@ -1,3 +1,29 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+
 #pragma once
 #include "util/settings.h"
 #include "util/NumType.h"
@@ -7,7 +33,25 @@
 namespace HSLAM
 {
 
+// Check bounds (assuming that the elements (ix, iy); (ix+1, iy); (ix, iy+1); (ix+1, iy+1) are accessed.
+inline void checkBoundsPlus1(int ix, int iy, const int width)
+{
+#ifdef DEBUG
+// Note: That only getInterpolatedElement31, getInterpolatedElement33 and getInterpolatedElement33BiLin are actually used in the code.
+// + getInterpolatedElement11BiCub and getInterpolatedElement are used in Undistort.
+    int height = 512; // TODO: Pass the actual height to the function (should be optimized out if not used anyway, so no performance hit).
+    bool oob = ix < 0 || iy < 0 || ix + 1 >= width || iy + 1 >= height;
+    if(oob)
+    {
+#ifdef STACKTRACE
+        std::cout << boost::stacktrace::stacktrace();
+#endif
+        std::cout << "ERROR: Trying to access invalid element: ix: " << ix << " iy: " << iy << " width: " << width << std::endl;
+        assert(0);
+    }
+#endif
 
+}
 
 // reads interpolated element from a uchar* array
 // SSE2 optimization possible
@@ -22,6 +66,7 @@ EIGEN_ALWAYS_INLINE float getInterpolatedElement(const float* const mat, const f
 	float dxdy = dx*dy;
 	const float* bp = mat +ix+iy*width;
 
+	checkBoundsPlus1(ix, iy, width);
 
 	float res =   dxdy * bp[1+width]
 				+ (dy-dxdy) * bp[width]
@@ -40,6 +85,7 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement43(const Eigen::Vector
 	float dxdy = dx*dy;
 	const Eigen::Vector4f* bp = mat +ix+iy*width;
 
+    checkBoundsPlus1(ix, iy, width);
 
 	return dxdy * *(const Eigen::Vector3f*)(bp+1+width)
 	        + (dy-dxdy) * *(const Eigen::Vector3f*)(bp+width)
@@ -56,6 +102,7 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33(const Eigen::Vector
 	float dxdy = dx*dy;
 	const Eigen::Vector3f* bp = mat +ix+iy*width;
 
+    checkBoundsPlus1(ix, iy, width);
 
 	return dxdy * *(const Eigen::Vector3f*)(bp+1+width)
 	        + (dy-dxdy) * *(const Eigen::Vector3f*)(bp+width)
@@ -75,6 +122,7 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33OverAnd(const Eigen:
 	const bool* bbp = overMat +ix+iy*width;
 	over_out = bbp[1+width] && bbp[1] && bbp[width] && bbp[0];
 
+    checkBoundsPlus1(ix, iy, width);
 	return dxdy * *(const Eigen::Vector3f*)(bp+1+width)
 	        + (dy-dxdy) * *(const Eigen::Vector3f*)(bp+width)
 	        + (dx-dxdy) * *(const Eigen::Vector3f*)(bp+1)
@@ -92,6 +140,7 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33OverOr(const Eigen::
 	const bool* bbp = overMat +ix+iy*width;
 	over_out = bbp[1+width] || bbp[1] || bbp[width] || bbp[0];
 
+    checkBoundsPlus1(ix, iy, width);
 	return dxdy * *(const Eigen::Vector3f*)(bp+1+width)
 	        + (dy-dxdy) * *(const Eigen::Vector3f*)(bp+width)
 	        + (dx-dxdy) * *(const Eigen::Vector3f*)(bp+1)
@@ -107,6 +156,7 @@ EIGEN_ALWAYS_INLINE float getInterpolatedElement31(const Eigen::Vector3f* const 
 	float dxdy = dx*dy;
 	const Eigen::Vector3f* bp = mat +ix+iy*width;
 
+    checkBoundsPlus1(ix, iy, width);
 
 	return dxdy * (*(const Eigen::Vector3f*)(bp+1+width))[0]
 	        + (dy-dxdy) * (*(const Eigen::Vector3f*)(bp+width))[0]
@@ -120,6 +170,7 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement13BiLin(const float* c
 	int iy = (int)y;
 	const float* bp = mat +ix+iy*width;
 
+    checkBoundsPlus1(ix, iy, width);
 	float tl = *(bp);
 	float tr = *(bp+1);
 	float bl = *(bp+width);
@@ -143,6 +194,7 @@ EIGEN_ALWAYS_INLINE Eigen::Vector3f getInterpolatedElement33BiLin(const Eigen::V
 	int ix = (int)x;
 	int iy = (int)y;
 	const Eigen::Vector3f* bp = mat +ix+iy*width;
+    checkBoundsPlus1(ix, iy, width);
 
 	float tl = (*(bp))[0];
 	float tr = (*(bp+1))[0];
