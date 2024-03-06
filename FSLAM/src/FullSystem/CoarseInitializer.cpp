@@ -391,14 +391,27 @@ Vec3f CoarseInitializer::calcResAndGS(
 	float cyl = cy[lvl];
 
 
-	Accumulator11 E;
+	for(auto&& acc9 : acc9s)
+	{
 	acc9.initialize();
+	}
+	for(auto&& E : accE)
+	{
 	E.initialize();
+
+	}
 
 	int npts = numPoints[lvl];
 	Pnt* ptsl = points[lvl];
-	for(int i=0;i<npts;i++)
+	// lambda function so it can be parallelized
+	// This part takes most of the time for this method --> parallelize this only
+	auto processPointsForReduce = [&](int min=0, int max=1, double* stats=0, int tid=0)
 	{
+		auto& acc9 = acc9s[tid];
+		auto& E = accE[tid];
+
+		for(int i = min; i < max; i++)
+		{
 		Pnt* point = ptsl+i;
 
 		point->maxstep = 1e10;
@@ -535,10 +548,20 @@ Vec3f CoarseInitializer::calcResAndGS(
 						(float) dp4[j], (float) dp5[j], (float) dp6[j], (float) dp7[j],
 						(float) r[j]);
 			}
+	}
 	};
 
-		E.finish();
+	// Calculate Hessian (acc9) and Residual Energy (E)
+	reduce.reduce(processPointsForReduce, 0, npts, 50);
+
+	for(auto&& acc9 : acc9s)
+	{
 	acc9.finish();
+	}
+	for(auto&& E : accE)
+	{
+		E.finish();
+	}
 
 	// Calculate alpha energy (EAlpha), and decide if we cap it.
 	Accumulator11 EAlpha;
@@ -548,12 +571,16 @@ Vec3f CoarseInitializer::calcResAndGS(
 		Pnt* point = ptsl+i;
 		if(!point->isGood_new)
 		{
-			E.updateSingle((float)(point->energy[1]));
+			// This should actually be EAlpha, but it seems like fixing this might change the optimal values of some
+			// parameters, so it's kept like it is (see https://github.com/JakobEngel/dso/issues/52)
+			// At the moment, this code will not change the value of E.A (because E.finish() is not called again after
+			// this. It will however change E.num.
+			accE[0].updateSingle((float)(point->energy[1]));
 		}
 		else
 		{
 			point->energy_new[1] = (point->idepth_new-1)*(point->idepth_new-1);
-			E.updateSingle((float)(point->energy_new[1]));
+			accE[0].updateSingle((float)(point->energy_new[1]));
 		}
 	}
 	EAlpha.finish();
@@ -603,9 +630,15 @@ Vec3f CoarseInitializer::calcResAndGS(
 	acc9SC.finish();
 
 
-	//printf("nelements in H: %d, in E: %d, in Hsc: %d / 9!\n", (int)acc9.num, (int)E.num, (int)acc9SC.num*9);
-	H_out = acc9.H.topLeftCorner<8,8>();// / acc9.num;
-	b_out = acc9.H.topRightCorner<8,1>();// / acc9.num;
+	// Extract the H and b matrices
+	H_out.setZero();
+	b_out.setZero();
+	// This needs to sum up the acc9s from all the workers!
+	for(auto&& acc9 : acc9s)
+	{
+		H_out += acc9.H.topLeftCorner<8,8>();// / acc9.num;
+		b_out += acc9.H.topRightCorner<8,1>();// / acc9.num;
+	}
 	H_out_sc = acc9SC.H.topLeftCorner<8,8>();// / acc9.num;
 	b_out_sc = acc9SC.H.topRightCorner<8,1>();// / acc9.num;
 
@@ -620,8 +653,15 @@ Vec3f CoarseInitializer::calcResAndGS(
 	b_out[1] += tlog[1]*alphaOpt*npts;
 	b_out[2] += tlog[2]*alphaOpt*npts;
 
+	double A = 0;
+	int num = 0;
+	for(auto&& E : accE)
+	{
+		A += E.A;
+		num += E.num;
+	}
 
-	return Vec3f(E.A, alphaEnergy ,E.num);
+	return Vec3f(A, alphaEnergy, num);
 }
 
 float CoarseInitializer::rescale()
