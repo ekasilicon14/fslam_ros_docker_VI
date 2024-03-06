@@ -48,6 +48,8 @@ namespace HSLAM
 PointHessian::PointHessian(const ImmaturePoint* const rawPoint, CalibHessian* Hcalib)
 {
 	instanceCounter++;
+	point_id = totalInstantCounter;
+	totalInstantCounter++;
 	host = rawPoint->host; // host frame
 	hasDepthPrior=false;
 

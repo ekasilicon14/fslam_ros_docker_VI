@@ -445,6 +445,8 @@ struct PointHessian
 {
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 	static int instanceCounter;
+	static unsigned long totalInstantCounter;
+	unsigned long point_id;
 	EFPoint* efPoint;
 
 	// static values

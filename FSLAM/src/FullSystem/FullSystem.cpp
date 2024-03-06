@@ -42,6 +42,7 @@ namespace HSLAM
 {
 int FrameHessian::instanceCounter=0;
 int PointHessian::instanceCounter=0;
+unsigned long PointHessian::totalInstantCounter=0;
 int CalibHessian::instanceCounter=0;
 
 
@@ -327,6 +328,56 @@ void FullSystem::printResult(std::string file, bool printSim)
 			" " << Twc.so3().unit_quaternion().z()<<
 			" " << Twc.so3().unit_quaternion().w() << "\n";
 	}
+	myfile.close();
+}
+
+void FullSystem::printPC(std::string file)
+{
+	boost::unique_lock<boost::mutex> lock(trackMutex);
+	boost::unique_lock<boost::mutex> crlock(shellPoseMutex);
+
+	std::ofstream myfile;
+	myfile.open (file.c_str());
+	myfile << std::setprecision(9);
+
+	unsigned long totalpcs = allMargPointsHistory.size();
+	//unsigned long totalpcs = allMargPointsHistory.size()+allFrameHistory.size();
+	
+	myfile << std::string("# .PCD v.6 - Point Cloud Data file format\n");
+	myfile << std::string("FIELDS x y z rgb\n");
+	myfile << std::string("SIZE 4 4 4 4\n");
+	myfile << std::string("TYPE F F F F\n");
+	myfile << std::string("COUNT 1 1 1 1\n");
+	myfile << std::string("WIDTH ") << totalpcs << std::string("\n");
+	myfile << std::string("HEIGHT 1\n");
+	myfile << std::string("#VIEWPOINT 0 0 0 1 0 0 0\n");
+	myfile << std::string("POINTS ") << totalpcs << std::string("\n");
+	myfile << std::string("DATA ascii\n");
+	
+	std::unordered_map<unsigned long, PC_output>::iterator itr; 
+	for (itr = allMargPointsHistory.begin(); itr != allMargPointsHistory.end(); itr++)  
+	{
+		PC_output tmp_PC = itr->second;
+		float rgb;
+		unsigned char b[] = {tmp_PC.r, tmp_PC.g, tmp_PC.b, 0};
+		memcpy(&rgb, &b, sizeof(rgb));
+
+		myfile << tmp_PC.x << " " << tmp_PC.y << " " << tmp_PC.z << " " << rgb << "\n";
+	} 
+
+	// Show trajectory in point cloud
+	for (FrameShell* s : allFrameHistory)  
+	{
+		Sophus::SE3d camToWorld = s->getPose();
+		Sophus::SE3d camToFirst = camToWorld;
+		float rgb;
+		unsigned char b[] = {0, 255, 0, 0};
+		memcpy(&rgb, &b, sizeof(rgb));
+		myfile << camToFirst.translation().x() <<
+            " " << camToFirst.translation().y() <<
+            " " << camToFirst.translation().z() << " " << rgb << "\n";
+	} 
+
 	myfile.close();
 }
 

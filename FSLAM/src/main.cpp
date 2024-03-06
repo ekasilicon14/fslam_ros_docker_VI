@@ -78,6 +78,7 @@ int main(int argc, char **argv)
 		("speed", "Enforce playback Speed to real-time", cxxopts::value<float>()->default_value("0.0"))
         ("C,colour", "Read colour images", cxxopts::value<bool>()->default_value("false"))
 		("S,use16bit", "Read 16 bit images", cxxopts::value<bool>()->default_value("false"))
+		("P,outPC", "Output point cloud", cxxopts::value<bool>()->default_value("false"))
 		("h,help", "Print usage")
     ;
 
@@ -95,6 +96,7 @@ int main(int argc, char **argv)
 	bool useSampleOutput = result["usesampleoutput"].as<bool>();
 	setting_logStuff = !result["nolog"].as<bool>();
 	disableAllDisplay = result["nogui"].as<bool>();
+	outputPC = result["outPC"].as<bool>();
 	debugSaveImages = result["save"].as<bool>();
 	setting_debugout_runquiet = result["quiet"].as<bool>();
 	multiThreading = !result["nomt"].as<bool>();
@@ -374,6 +376,7 @@ int main(int argc, char **argv)
 
 
         fullSystem->printResult("result.txt");
+		if (outputPC) fullSystem->printPC("PC.PCD");
 
 
         int numFramesProcessed = abs(idsToPlay[0]-idsToPlay.back());
