@@ -209,6 +209,7 @@ void parseArgument(char* arg)
 
 FullSystem* fullSystem = 0;
 Undistort* undistorter = 0;
+DBoW3::Vocabulary* Vocabpnt;
 int frameID = 0;
 
 void vidCb(const sensor_msgs::ImageConstPtr img)
@@ -226,6 +227,11 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 		fullSystem = new FullSystem();
 		fullSystem->linearizeOperation=false;
 		fullSystem->outputWrapper = wraps;
+		if(LoopClosure)
+		{
+			fullSystem->setVocab(Vocabpnt);
+			printf("Vocabulary Set\n");
+		}
 	    if(undistorter->photometricUndist != 0)
 	    	fullSystem->setGammaFunction(undistorter->photometricUndist->getG());
 		setting_fullResetRequested=false;
@@ -286,6 +292,25 @@ int main( int argc, char** argv )
 	setting_kfGlobalWeight = 1.3;
 
 
+	printf("MODE WITH CALIBRATION, but without exposure times!\n");
+	setting_photometricCalibration = 2;
+	setting_affineOptModeA = 0;
+	setting_affineOptModeB = 0;
+
+	if(!vocabPath.empty())
+	{
+		Vocabpnt = new DBoW3::Vocabulary();
+		Vocabpnt->load(vocabPath.c_str());
+		LoopClosure = true; 
+		printf("loaded Vocabulary from %s!\n", VocabFile.c_str());
+		if (Vocabpnt->empty())
+		{
+			printf("failed to load vocabulary! Exit\n");
+			exit(1);
+		}
+	}else{
+		LoopClosure = false; 
+	}
 
     undistorter = Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile);
 
@@ -298,6 +323,11 @@ int main( int argc, char** argv )
     fullSystem = new FullSystem();
     fullSystem->linearizeOperation=false;
 	
+	if(LoopClosure)
+	{
+		fullSystem->setVocab(Vocabpnt);
+		printf("Vocabulary Set\n");
+	}
 	
 	IOWrap::PangolinDSOViewer* viewer = 0;
 	if(!disableAllDisplay)
@@ -340,7 +370,7 @@ int main( int argc, char** argv )
             }
 			
 			
-			if(fullSystem->initFailed || setting_fullResetRequested)
+	if(fullSystem->initFailed || setting_fullResetRequested)
             {
                 printf("RESETTING!\n");
 				std::vector<IOWrap::Output3DWrapper*> wraps = fullSystem->outputWrapper;
@@ -381,6 +411,11 @@ int main( int argc, char** argv )
         ow->join();
         delete ow;
     }
+
+	if(LoopClosure)
+	{
+		delete Vocabpnt;
+	}
 
 	printf("DELETE FULLSYSTEM!\n");
 	delete fullSystem;
