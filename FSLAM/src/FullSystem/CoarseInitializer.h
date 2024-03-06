@@ -26,7 +26,6 @@
 #pragma once
 
 #include "util/NumType.h"
-#include "util/IndexThreadReduce.h"
 #include "OptimizationBackend/MatrixAccumulators.h"
 #include "IOWrapper/Output3DWrapper.h"
 #include "util/settings.h"
@@ -127,11 +126,8 @@ private:
 	Vec10f* JbBuffer;			// 0-7: sum(dd * dp). 8: sum(res*dd). 9: 1/(1+sum(dd*dd))=inverse hessian entry.
 	Vec10f* JbBuffer_new;
 
-	std::array<Accumulator11, NUM_THREADS> accE;
-	std::array<Accumulator9, NUM_THREADS> acc9s; // one acc for each worker thread.
+	Accumulator9 acc9;
 	Accumulator9 acc9SC;
-
-	IndexThreadReduce<double> reduce;
 
 	Vec3f dGrads[PYR_LEVELS];
 
