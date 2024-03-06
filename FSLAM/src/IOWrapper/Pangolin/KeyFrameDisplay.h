@@ -51,6 +51,10 @@ struct InputPointSparse
 	float relObsBaseline;
 	int numGoodRes;
 	unsigned char color[ppp];
+	bool colourValid;
+	unsigned char color_r[ppp];
+	unsigned char color_g[ppp];
+	unsigned char color_b[ppp];
 	unsigned char status;
 };
 

@@ -76,7 +76,9 @@ int main(int argc, char **argv)
 		("m,mode", "System mode: 0: use precalibrated gamma and vignette -1: photometric mode without calibration - 2: photometric mode with perfect images", cxxopts::value<int>()->default_value("1"))
         ("preset", "Preset configuration}", cxxopts::value<int>()->default_value("0"))
 		("speed", "Enforce playback Speed to real-time", cxxopts::value<float>()->default_value("0.0"))
-        ("h,help", "Print usage")
+        ("C,colour", "Read colour images", cxxopts::value<bool>()->default_value("false"))
+		("S,use16bit", "Read 16 bit images", cxxopts::value<bool>()->default_value("false"))
+		("h,help", "Print usage")
     ;
 
 	auto result = options.parse(argc, argv);
@@ -102,6 +104,9 @@ int main(int argc, char **argv)
 	int preset = result["preset"].as<int>();
 	int mode = result["mode"].as<int>();
 	float playbackSpeed = result["speed"].as<float>(); // 0 for linearize (play as fast as possible, while sequentializing tracking & mapping). otherwise, factor on timestamps.
+
+	bool use_colour = result["colour"].as<bool>();
+	bool use_16bit = result["use16bit"].as<bool>(); 
 
 	if(source.empty() || calib.empty()) { std::cout<< "Path to images or calibration not provided! cannot function without them. exit." << std::endl; return(0);}
 
@@ -186,7 +191,7 @@ int main(int argc, char **argv)
 	}
 	
 
-	ImageFolderReader* reader = new ImageFolderReader(source, calib, gammaCalib, vignette);
+	ImageFolderReader* reader = new ImageFolderReader(source, calib, gammaCalib, vignette, use_16bit, use_colour);
 	reader->setGlobalCalibration();
 	set_frame_sz(reader->get_undist_width(), reader->get_undist_height());
 

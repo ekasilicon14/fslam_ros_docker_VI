@@ -25,6 +25,7 @@
 
 #include "IOWrapper/ImageRW.h"
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/imgproc.hpp>
 
 
 namespace HSLAM
@@ -68,6 +69,37 @@ MinimalImageB3* readImageRGB_8U(std::string filename)
 	return img;
 }
 
+MinimalImageB* readImageRGB_8U_split(std::string filename, MinimalImageB*& r, MinimalImageB*& g, MinimalImageB*& b)
+{
+	cv::Mat m = cv::imread(filename, CV_LOAD_IMAGE_COLOR);
+	if(m.rows*m.cols==0)
+	{
+		printf("cv::imread could not read image %s! this may segfault. \n", filename.c_str());
+		return 0;
+	}
+	if(m.type() != CV_8UC3)
+	{
+		printf("cv::imread did something strange! this may segfault. \n");
+		return 0;
+	}
+
+	cv::Mat grey_m;
+	cv::cvtColor(m, grey_m, CV_BGR2GRAY);
+
+	cv::Mat channels[3];
+    cv::split(m, channels);
+	r = new MinimalImageB(channels[2].cols, channels[2].rows);
+	memcpy(r->data, channels[2].data, channels[2].rows*channels[2].cols);
+	g = new MinimalImageB(channels[1].cols, channels[1].rows);
+	memcpy(g->data, channels[1].data, channels[1].rows*channels[1].cols);
+	b = new MinimalImageB(channels[0].cols, channels[0].rows);
+	memcpy(b->data, channels[0].data, channels[0].rows*channels[0].cols);
+
+	MinimalImageB* img = new MinimalImageB(grey_m.cols, grey_m.rows);
+	memcpy(img->data, grey_m.data, grey_m.rows*grey_m.cols);
+	
+	return img;
+}
 MinimalImage<unsigned short>* readImageBW_16U(std::string filename)
 {
 	cv::Mat m = cv::imread(filename, CV_LOAD_IMAGE_UNCHANGED);

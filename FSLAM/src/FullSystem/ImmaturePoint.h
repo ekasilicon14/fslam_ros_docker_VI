@@ -62,9 +62,10 @@ public:
 	float color[MAX_RES_PER_POINT];
 	float weights[MAX_RES_PER_POINT];
 
-
-
 	std::weak_ptr<MapPoint> Mp;
+
+	Eigen::Vector3f colour3[MAX_RES_PER_POINT];
+	bool colourValid;
 
 	Mat22f gradH;
 	Vec2f gradH_ev;

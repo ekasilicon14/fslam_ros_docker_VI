@@ -126,33 +126,81 @@ PhotometricUndistorter::PhotometricUndistorter(
 	MinimalImage<unsigned short>* vm16 = IOWrap::readImageBW_16U(vignetteImage.c_str());
 	MinimalImageB* vm8 = IOWrap::readImageBW_8U(vignetteImage.c_str());
 	
+	// Vignette Correction
+	// Removes the reduction of brightness near camera edges
+
+	// First undistort the vignette map
 	float* vignetteIn = nullptr;
 
 	if (vm16 != 0)
 		vignetteIn = geomUndist->geometricallyUnDistortVignette(vm16);
 	else if (vm8 != 0)
-			vignetteIn = geomUndist->geometricallyUnDistortVignette(vm8);
+		vignetteIn = geomUndist->geometricallyUnDistortVignette(vm8);
 	else
 	{
 		printf("could not load Vignette Image from %s! exiting\n", vignetteImage.c_str());
 		exit(1);
 	}
 
-	if(vm16!=0) delete vm16;
-	if(vm8!=0) delete vm8;
-
+	// Now create the vignette map
 	vignetteMap = new float[w*h];
 	vignetteMapInv = new float[w*h];
 
-	float maxV=0;
-	for(int i=0, size = w*h; i<size; ++i)
+	if(vm16 != 0) // 16 bit vignette image
+	{
+		if(vm16->w != w ||vm16->h != h)
+		{
+			printf("PhotometricUndistorter: Invalid vignette image size! got %d x %d, expected %d x %d\n",
+					vm16->w, vm16->h, w, h);
+			if(vm16!=0) delete vm16;
+			if(vm8!=0) delete vm8;
+			if(vignetteIn) delete[] vignetteIn;
+			return;
+		}
+
+		float maxV=0;
+		for(int i=0, size = w*h; i<size; ++i)
+			if(vignetteIn[i] > maxV) maxV = vignetteIn[i];
+
+		for(int i=0;i<w*h;i++)
+		{
+			vignetteMap[i] = vignetteIn[i] / maxV;
+			vignetteMapInv[i] = 1.0f / vignetteMap[i];
+		}
+	}
+	else if(vm8 != 0) // 8 bit vignette image
+	{
+		if(vm8->w != w ||vm8->h != h)
+		{
+			printf("PhotometricUndistorter: Invalid vignette image size! got %d x %d, expected %d x %d\n",
+					vm8->w, vm8->h, w, h);
+			if(vm16!=0) delete vm16;
+			if(vm8!=0) delete vm8;
+			if(vignetteIn) delete[] vignetteIn;
+			return;
+		}
+
+		float maxV=0;
+		for(int i=0, size = w*h; i<size; ++i)
 		if(vignetteIn[i] > maxV) maxV = vignetteIn[i];
 
-	for(int i=0;i<w*h;i++)
-	{
-		vignetteMap[i] = vignetteIn[i] / maxV;
-		vignetteMapInv[i] = 1.0f / vignetteMap[i];
+		for(int i=0;i<w*h;i++)
+		{
+			vignetteMap[i] = vignetteIn[i] / maxV;
+			vignetteMapInv[i] = 1.0f / vignetteMap[i];
+		}
 	}
+	else
+	{
+		printf("PhotometricUndistorter: Invalid vignette image\n");
+		if(vm16!=0) delete vm16;
+		if(vm8!=0) delete vm8;
+		if(vignetteIn) delete[] vignetteIn;
+		return;
+	}
+
+	if(vm16!=0) delete vm16;
+	if(vm8!=0) delete vm8;
 
 	if(vignetteIn) delete[] vignetteIn;
 
@@ -160,6 +208,10 @@ PhotometricUndistorter::PhotometricUndistorter(
 	valid = true;
 }
 
+/**
+ * @brief Destroy the Photometric Undistorter:: Photometric Undistorter object
+ * 
+ */
 PhotometricUndistorter::~PhotometricUndistorter()
 {
 	if(vignetteMap != 0) delete[] vignetteMap;
@@ -168,6 +220,11 @@ PhotometricUndistorter::~PhotometricUndistorter()
 }
 
 
+/**
+ * @brief Maps image to Gamma Correction with interpolation
+ * 
+ * @param image 
+ */
 void PhotometricUndistorter::unMapFloatImage(float* image)
 {
 	int wh=w*h;
@@ -179,12 +236,12 @@ void PhotometricUndistorter::unMapFloatImage(float* image)
 		if(color < 1e-3)
 			BinvC=0.0f;
         else if(color > GDepth-1.01f)
-            BinvC=GDepth-1.1;
+            BinvC=GDepth-1.01f;
 		else
 		{
 			int c = color;
 			float a = color-c;
-			BinvC=G[c]*(1-a) + G[c+1]*a;
+			BinvC=G[c]*(1-a) + G[c+1]*a; // Interpolate between G[c] and G[c+1]
 		}
 
 		float val = BinvC;
@@ -193,8 +250,17 @@ void PhotometricUndistorter::unMapFloatImage(float* image)
 	}
 }
 
-// template<typename T>
-void PhotometricUndistorter::processFrame(float* image_in, ImageAndExposure* output, float exposure_time, float factor)
+/**
+ * @brief Photometrically undistorts image
+ * 
+ * Corrected output image is stored in class variable image (ImageAndExposure*)
+ * 
+ * @tparam T 
+ * @param image_in 
+ * @param exposure_time 
+ * @param factor 
+ */
+void PhotometricUndistorter::processFrame(float* image_in, ImageAndExposure* output, float exposure_time, float factor, bool setMeta)
 {
 	int wh=w*h;
     float* data = output->image;
@@ -202,50 +268,67 @@ void PhotometricUndistorter::processFrame(float* image_in, ImageAndExposure* out
 	assert(data != 0);
 
 
-	if(!valid || exposure_time <= 0 || setting_photometricCalibration==0) // disable full photometric calibration.
+	if(!valid || exposure_time <= 0 || setting_photometricCalibration==0) // Disable full photometric calibration.
 	{
 		for(int i=0; i<wh;i++)
 		{
+			// Multiply to factor and set to 0-255
+			// This should divide by 256 if the image is 16 bit
 			data[i] = factor*image_in[i];
 		}
-		output->exposure_time = exposure_time;
-		// output->timestamp = 0;
+		if (setMeta){
+			output->exposure_time = exposure_time;
+			output->timestamp = 0;
+		}
 	}
 	else
 	{
+		// Gamma Correction
 		for(int i=0; i<wh;i++)
 		{
-			data[i] = G[static_cast<unsigned char>(image_in[i])];			
+			// Note that this also sets the image to 0-255
+			data[i] = G[static_cast<unsigned char>(image_in[i])];
 		}
 
+		// Vignette Correction
 		if(setting_photometricCalibration==2)
 		{
-			for(int i=0; i<wh;i++)
+			for(int i=0; i<wh;i++){
 				data[i] *= vignetteMapInv[i];
+				if (data[i] > 255) data[i] = 255;
+			}
 		}
 
-		output->exposure_time = exposure_time;
-		// output->timestamp = 0;
+		if (setMeta){
+			output->exposure_time = exposure_time;
+			output->timestamp = 0;
+		}
 	}
 
 
-	if(!setting_useExposure)
+	if(!setting_useExposure && setMeta)
 		output->exposure_time = 1;
-
 }
-// template void PhotometricUndistorter::processFrame<unsigned char>(unsigned char* image_in, float exposure_time, float factor);
-// template void PhotometricUndistorter::processFrame<unsigned short>(unsigned short* image_in, float exposure_time, float factor);
 
 
-
-
-
+/**
+ * @brief Destroy the Undistort:: Undistort object
+ * 
+ */
 Undistort::~Undistort()
 {
 	if(remapX != 0) delete[] remapX;
 	if(remapY != 0) delete[] remapY;
 }
 
+/**
+ * @brief Reads camera distortion file and loads data
+ * 
+ * @param configFilename 
+ * @param gammaFilename 
+ * @param vignetteFilename 
+ * @return Undistort* 
+ */
 Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::string gammaFilename, std::string vignetteFilename)
 {
 	printf("Reading Calibration from file %s",configFilename.c_str());
@@ -268,7 +351,9 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
 
 	Undistort* u;
 
-    // for backwards-compatibility: Use RadTan model for 8 parameters.
+	// Default DSO assumed model from number of input parameters
+    // For backwards-compatibility: Use RadTan model for 8 parameters.
+	// fx, fy, cx, cy, k1, k2, r1, r2
 	if(std::sscanf(l1.c_str(), "%f %f %f %f %f %f %f %f",
 			&ic[0], &ic[1], &ic[2], &ic[3],
 			&ic[4], &ic[5], &ic[6], &ic[7]) == 8)
@@ -278,7 +363,8 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
 		if(!u->isValid()) {delete u; return 0; }
     }
 
-    // for backwards-compatibility: Use Pinhole / FoV model for 5 parameter.
+    // For backwards-compatibility: Use Pinhole / FoV model for 5 parameter.
+	// fx, fy, cx, cy, scale
     else if(std::sscanf(l1.c_str(), "%f %f %f %f %f",
 			&ic[0], &ic[1], &ic[2], &ic[3], &ic[4]) == 5)
 	{
@@ -301,6 +387,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
 
 
     // clean model selection implementation.
+	// fx, fy, cx, cy, k0, k1, k2, k3
     else if(std::sscanf(l1.c_str(), "KannalaBrandt %f %f %f %f %f %f %f %f",
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4], &ic[5], &ic[6], &ic[7]) == 8)
@@ -310,6 +397,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
     }
 
 
+	// fx, fy, cx, cy, k1, k2, r1, r2
     else if(std::sscanf(l1.c_str(), "RadTan %f %f %f %f %f %f %f %f",
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4], &ic[5], &ic[6], &ic[7]) == 8)
@@ -319,6 +407,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
     }
 
 
+	// fx, fy, cx, cy, k1, k2, k3, k4
     else if(std::sscanf(l1.c_str(), "EquiDistant %f %f %f %f %f %f %f %f",
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4], &ic[5], &ic[6], &ic[7]) == 8)
@@ -328,6 +417,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
     }
 
 
+	// fx, fy, cx, cy, scale
     else if(std::sscanf(l1.c_str(), "FOV %f %f %f %f %f",
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4]) == 5)
@@ -337,6 +427,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
     }
 
 
+	// fx, fy, cx, cy
     else if(std::sscanf(l1.c_str(), "Pinhole %f %f %f %f %f",
             &ic[0], &ic[1], &ic[2], &ic[3],
             &ic[4]) == 5)
@@ -352,6 +443,7 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
         exit(1);
     }
 
+	// Load data for photometric calibration
 	u->loadPhotometricCalibration(
 				gammaFilename,
 				"",
@@ -360,11 +452,28 @@ Undistort* Undistort::getUndistorterForFile(std::string configFilename, std::str
 	return u;
 }
 
+/**
+ * @brief Wrapper function to load photometric calibration
+ * 
+ * @param file 
+ * @param noiseImage 
+ * @param vignetteImage 
+ */
 void Undistort::loadPhotometricCalibration(std::string file, std::string noiseImage, std::string vignetteImage)
 {
 	photometricUndist = new PhotometricUndistorter(file, noiseImage, vignetteImage, this, w, h); //getOriginalSize()[0], getOriginalSize()[1]
 }
 
+/**
+ * @brief Undistorts image
+ * 
+ * @tparam T 
+ * @param image_raw 
+ * @param exposure 
+ * @param timestamp 
+ * @param factor 
+ * @return ImageAndExposure* 
+ */
 template<typename T>
 float* Undistort::geometricallyUnDistortVignette(const MinimalImage<T>* image_raw)
 {
@@ -446,7 +555,7 @@ float* Undistort::geometricallyUnDistortVignette(const MinimalImageB* image_raw)
 
 
 template<typename T>
-ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float exposure, double timestamp, float factor) const
+ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float exposure, double timestamp, float factor, bool useColourPassed) const
 {
 	if(image_raw->w != wOrg || image_raw->h != hOrg)
 	{
@@ -454,18 +563,19 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 		exit(1);
 	}
 
-	ImageAndExposure* result = new ImageAndExposure(w, h, timestamp);
+	ImageAndExposure* result = new ImageAndExposure(w, h, timestamp, useColourPassed);
 
 
-	if (!passthrough)
+	if (!passthrough) // If all inputs are valid
 	{
 		float* out_data = result->PhoUncalibImage;
-		T *in_data = image_raw->data; //photometricUndist->output->image;
+		T *in_data = image_raw->data;
 
 		float* noiseMapX=0;
 		float* noiseMapY=0;
-		if(benchmark_varNoise>0)
+		if(benchmark_varNoise>0) // Add noise to the images for testing
 		{
+			// Generate grid of random noise
 			int numnoise=(benchmark_noiseGridsize+8)*(benchmark_noiseGridsize+8);
 			noiseMapX=new float[numnoise];
 			noiseMapY=new float[numnoise];
@@ -474,21 +584,22 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 
 			for(int i=0;i<numnoise;i++)
 			{
-				noiseMapX[i] =  2*benchmark_varNoise * (rand()/(float)RAND_MAX - 0.5f);
-				noiseMapY[i] =  2*benchmark_varNoise * (rand()/(float)RAND_MAX - 0.5f);
+				// Random values are between (-benchmark_varNoise, benchmark_varNoise)
+				noiseMapX[i] =  benchmark_varNoise * 2 * (rand()/(float)RAND_MAX - 0.5f);
+				noiseMapY[i] =  benchmark_varNoise * 2 * (rand()/(float)RAND_MAX - 0.5f);
 			}
 		}
 
 
 		for(int idx = w*h-1;idx>=0;idx--)
 		{
-			// get interp. values
+			// Remap pixels to undistorted positions
 			float xx = remapX[idx];
 			float yy = remapY[idx];
 
 
 
-			if(benchmark_varNoise>0)
+			if(benchmark_varNoise>0) // Add remapping noise to the images for experiments
 			{
 				float deltax = getInterpolatedElement11BiCub(noiseMapX, 4+(xx/(float)wOrg)*benchmark_noiseGridsize, 4+(yy/(float)hOrg)*benchmark_noiseGridsize, benchmark_noiseGridsize+8 );
 				float deltay = getInterpolatedElement11BiCub(noiseMapY, 4+(xx/(float)wOrg)*benchmark_noiseGridsize, 4+(yy/(float)hOrg)*benchmark_noiseGridsize, benchmark_noiseGridsize+8 );
@@ -508,7 +619,7 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 				out_data[idx] = 0;
 			else
 			{
-				// get integer and rational parts
+				// Get integer and rational parts
 				int xxi = xx;
 				int yyi = yy;
 				xx -= xxi;
@@ -518,7 +629,7 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 				// get array base pointer
 				const T* src = in_data + xxi + yyi * wOrg;
 
-				// interpolate (bilinear)
+				// Interpolate (bilinear)
 				out_data[idx] =  xxyy * src[1+wOrg]
 									+ (yy-xxyy) * src[wOrg]
 									+ (xx-xxyy) * src[1]
@@ -537,20 +648,91 @@ ImageAndExposure* Undistort::undistort(const MinimalImage<T>* image_raw, float e
 	{
 		for (int i = 0, size = w * h; i < size; ++i)
 			result->PhoUncalibImage[i] = image_raw->data[i];
-		// memcpy(result->PhoUncalibImage, image_raw->data, sizeof(float)*w*h);
 	}
 
-	photometricUndist->processFrame(result->PhoUncalibImage, result, exposure, factor);
-	// photometricUndist->output->copyMetaTo(*result);
+	photometricUndist->processFrame(result->PhoUncalibImage, result, exposure, factor, true);
 
 	applyBlurNoise(result->image);
 
 	return result;
 }
-template ImageAndExposure* Undistort::undistort<unsigned char>(const MinimalImage<unsigned char>* image_raw, float exposure, double timestamp, float factor) const;
-template ImageAndExposure* Undistort::undistort<unsigned short>(const MinimalImage<unsigned short>* image_raw, float exposure, double timestamp, float factor) const;
+template ImageAndExposure* Undistort::undistort<unsigned char>(const MinimalImage<unsigned char>* image_raw, float exposure, double timestamp, float factor, bool useColourPassed) const;
+template ImageAndExposure* Undistort::undistort<unsigned short>(const MinimalImage<unsigned short>* image_raw, float exposure, double timestamp, float factor, bool useColourPassed) const;
+
+template<typename T>
+void Undistort::undistort_colour(MinimalImage<T>* r_image, MinimalImage<T>* g_image, MinimalImage<T>* b_image, ImageAndExposure* out_image, float exposure, double timestamp, float factor)
+{
+	MinimalImage<T>* channels[3];
+	channels[0] = r_image;
+	channels[1] = g_image;
+	channels[2] = b_image;
+
+	float* out_channels[3];
+	out_channels[0] = out_image->r_image;
+	out_channels[1] = out_image->g_image;
+	out_channels[2] = out_image->b_image;
+
+	if(out_image->useColour == false){
+		printf("Colour not actually being used\n");
+		exit(1);
+	}
+
+	for (unsigned short i = 0; i<3; i++){
+		if(channels[i]->w != wOrg || channels[i]->h != hOrg)
+		{
+			printf("Undistort::undistort: wrong colour image size (%d %d instead of %d %d) \n", channels[i]->w, channels[i]->h, w, h);
+			exit(1);
+		}
+	}
+
+	for (unsigned short i = 0; i<3; i++){
+		if (!passthrough) // If all inputs are valid
+		{
+			float* out_data = out_channels[i];
+			T* in_data = channels[i]->data;
+
+			for(int idx = w*h-1;idx>=0;idx--)
+			{
+				// Remap pixels to undistorted positions
+				float xx = remapX[idx];
+				float yy = remapY[idx];
+				if(xx<0){
+					out_data[idx] = 0;
+				}
+				else
+				{
+					// Get integer and rational parts
+					int xxi = xx;
+					int yyi = yy;
+					xx -= xxi;
+					yy -= yyi;
+					float xxyy = xx*yy;
+					// Get array base pointer
+					const T* src = in_data + xxi + yyi * wOrg;
+					// Interpolate (bilinear)
+					out_data[idx] =  xxyy * src[1+wOrg]
+										+ (yy-xxyy) * src[wOrg]
+										+ (xx-xxyy) * src[1]
+										+ (1-xx-yy+xxyy) * src[0];
+				}
+			}
+		}
+		else
+		{
+			for (int j = 0, size = w * h; j < size; ++j)
+				out_channels[i][j] = channels[i]->data[i];
+		}
+	}
+}
+template void Undistort::undistort_colour<unsigned char>(MinimalImage<unsigned char>* r_image, MinimalImage<unsigned char>* g_image, MinimalImage<unsigned char>* b_image, ImageAndExposure* out_image, float exposure, double timestamp, float factor=1);
+template void Undistort::undistort_colour<unsigned short>(MinimalImage<unsigned short>* r_image, MinimalImage<unsigned short>* g_image, MinimalImage<unsigned short>* b_image, ImageAndExposure* out_image, float exposure, double timestamp, float factor=1);
 
 
+/**
+ * @brief Applies gaussian blur noise for experiments
+ * 
+ * @param img 
+ */
 void Undistort::applyBlurNoise(float* img) const
 {
 	if(benchmark_varBlurNoise==0) return;
@@ -574,6 +756,7 @@ void Undistort::applyBlurNoise(float* img) const
 	for(int i=0;i<1000;i++)
 		gaussMap[i] = expf((float)(-i*i/(100.0*100.0)));
 
+	// Applies randomized Gaussian kernel to image
 	// x-blur.
 	for(int y=0;y<h;y++)
 		for(int x=0;x<w;x++)
@@ -652,12 +835,19 @@ void Undistort::applyBlurNoise(float* img) const
 	delete[] noiseMapY;
 }
 
+/**
+ * @brief Finds optimal crop for image
+ * 
+ * Sets crop to max size and the shrinks it till there are no more invalid pixels
+ * 
+ */
 void Undistort::makeOptimalK_crop()
 {
 	printf("finding CROP optimal new model!\n");
 	K.setIdentity();
 
-	// 1. stretch the center lines as far as possible, to get initial coarse quess.
+	// 1. Stretch the center lines as far as possible, to get initial coarse crop
+	// This is done by running the undistortion on a horizontal and vertical line of length -0.5 to 0.5
 	float* tgX = new float[100000];
 	float* tgY = new float[100000];
 	float minX = 0;
@@ -665,8 +855,7 @@ void Undistort::makeOptimalK_crop()
 	float minY = 0;
 	float maxY = 0;
 
-	for(int x=0; x<100000;x++)
-	{tgX[x] = (x-50000.0f) / 10000.0f; tgY[x] = 0;}
+	for(int x=0; x<100000;x++) {tgX[x] = (x-50000.0f) / 10000.0f; tgY[x] = 0;}
 	distortCoordinates(tgX, tgY,tgX, tgY,100000);
 	for(int x=0; x<100000;x++)
 	{
@@ -676,8 +865,7 @@ void Undistort::makeOptimalK_crop()
 			maxX = (x-50000.0f) / 10000.0f;
 		}
 	}
-	for(int y=0; y<100000;y++)
-	{tgY[y] = (y-50000.0f) / 10000.0f; tgX[y] = 0;}
+	for(int y=0; y<100000;y++) {tgY[y] = (y-50000.0f) / 10000.0f; tgX[y] = 0;}
 	distortCoordinates(tgX, tgY,tgX, tgY,100000);
 	for(int y=0; y<100000;y++)
 	{
@@ -701,8 +889,8 @@ void Undistort::makeOptimalK_crop()
 
 
 
-	// 2. while there are invalid pixels at the border: shrink square at the side that has invalid pixels,
-	// if several to choose from, shrink the wider dimension.
+	// 2. While there are invalid pixels at the border: shrink square at the side that has invalid pixels,
+	// If several to choose from, shrink the wider dimension.
 	bool oobLeft=true, oobRight=true, oobTop=true, oobBottom=true;
 	int iteration=0;
 	while(oobLeft || oobRight || oobTop || oobBottom)
@@ -776,10 +964,25 @@ void Undistort::makeOptimalK_crop()
 
 void Undistort::makeOptimalK_full()
 {
-	// todo
+	// TODO
 	assert(false);
 }
 
+/**
+ * @brief Parses inputted data into a remapping array
+ * 
+ * Used by the initializer of the distortion model classes
+ * Function changes depending on distortion model
+ * Camera text file is formated like this:
+ * line 1: Undistortion type and camera parameters
+ * line 2: Input image size
+ * line 3: Crop settings or output camera parameteers
+ * line 4: Output image size
+ * 
+ * @param configFileName 
+ * @param nPars 
+ * @param prefix 
+ */
 void Undistort::readFromFile(const char* configFileName, int nPars, std::string prefix)
 {
 	photometricUndist=0;
@@ -803,7 +1006,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
     std::getline(infile,l3);
     std::getline(infile,l4);
 
-    // l1 & l2
+    // line 1 & line 2
     if(nPars == 5) // fov model
 	{
 		char buf[1000];
@@ -854,6 +1057,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 
 
 
+	// Change relative width and height to absolute size
     if(parsOrg[2] < 1 && parsOrg[3] < 1)
     {
         printf("\n\nFound fx=%f, fy=%f, cx=%f, cy=%f.\n I'm assuming this is the \"relative\" calibration file format,"
@@ -862,7 +1066,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
                parsOrg[0] * wOrg, parsOrg[1] * hOrg, parsOrg[2] * wOrg - 0.5, parsOrg[3] * hOrg - 0.5 );
 
         // rescale and substract 0.5 offset.
-        // the 0.5 is because I'm assuming the calibration is given such that the pixel at (0,0)
+        // the 0.5 is because it is assumed the calibration is given such that the pixel at (0,0)
         // contains the integral over intensity over [0,0]-[1,1], whereas I assume the pixel (0,0)
         // to contain a sample of the intensity ot [0,0], which is best approximated by the integral over
         // [-0.5,-0.5]-[0.5,0.5]. Thus, the shift by -0.5.
@@ -874,7 +1078,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 
 
 
-	// l3
+	// line 3
 	if(l3 == "crop")
 	{
 		outputCalibration[0] = -1;
@@ -904,16 +1108,16 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 	}
 
 
-	// l4
+	// line 4
 	if(std::sscanf(l4.c_str(), "%d %d", &w, &h) == 2)
 	{
-		if(benchmarkSetting_width != 0)
+		if(benchmarkSetting_width != 0) // Experimental
         {
 			w = benchmarkSetting_width;
             if(outputCalibration[0] == -3)
                 outputCalibration[0] = -1;  // crop instead of none, since probably resolution changed.
         }
-        if(benchmarkSetting_height != 0)
+        if(benchmarkSetting_height != 0) // Experimental
         {
 			h = benchmarkSetting_height;
             if(outputCalibration[0] == -3)
@@ -931,17 +1135,19 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
     remapX = new float[w*h];
     remapY = new float[w*h];
 
-	if(outputCalibration[0] == -1)
+	// Cropping sets the output camera K matrix
+	if(outputCalibration[0] == -1) // Crop
 		makeOptimalK_crop();
-	else if(outputCalibration[0] == -2)
+	else if(outputCalibration[0] == -2) // Crop full
 		makeOptimalK_full();
-	else if(outputCalibration[0] == -3)
+	else if(outputCalibration[0] == -3) // None
 	{
 		if(w != wOrg || h != hOrg)
 		{
 			printf("ERROR: rectification mode none requires input and output dimenstions to match!\n\n");
 			exit(1);
 		}
+		// Set K to be the same as input
 		K.setIdentity();
         K(0,0) = parsOrg[0];
         K(1,1) = parsOrg[1];
@@ -949,7 +1155,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
         K(1,2) = parsOrg[3];
 		passthrough = true;
 	}
-	else
+	else // Inputted value
 	{
 
 
@@ -960,6 +1166,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
         }
 
 
+		// Set K to be given parameters
 		K.setIdentity();
         K(0,0) = outputCalibration[0] * w;
         K(1,1) = outputCalibration[1] * h;
@@ -967,7 +1174,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
         K(1,2) = outputCalibration[3] * h - 0.5;
 	}
 
-	if(benchmarkSetting_fxfyfac != 0)
+	if(benchmarkSetting_fxfyfac != 0) // Experimental
 	{
 		K(0,0) = fmax(benchmarkSetting_fxfyfac, (float)K(0,0));
 		K(1,1) = fmax(benchmarkSetting_fxfyfac, (float)K(1,1));
@@ -975,6 +1182,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 	}
 
 
+	// Set remapping arrays
 	for(int y=0;y<h;y++)
 		for(int x=0;x<w;x++)
 		{
@@ -982,9 +1190,11 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 			remapY[x+y*w] = y;
 		}
 
+	// Create remapping matrix
 	distortCoordinates(remapX, remapY, remapX, remapY, h*w);
 
 
+	// Make rounding resistant.
 	for(int y=0;y<h;y++)
 		for(int x=0;x<w;x++)
 		{
@@ -997,7 +1207,7 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 			if(ix == wOrg-1) ix = wOrg-1.001;
 			if(iy == hOrg-1) ix = hOrg-1.001;
 
-			if(ix > 0 && iy > 0 && ix < wOrg-1 &&  iy < wOrg-1)
+			if(ix > 0 && iy > 0 && ix < wOrg-1 &&  iy < hOrg-1)
 			{
 				remapX[x+y*w] = ix;
 				remapY[x+y*w] = iy;
@@ -1014,12 +1224,13 @@ void Undistort::readFromFile(const char* configFileName, int nPars, std::string 
 
 
 
-	printf("\nRectified Kamera Matrix:\n");
+	printf("\nRectified Camera Matrix:\n");
 	std::cout << K << "\n\n";
 
 }
 
 
+// The functions below implement the distortCoordinates for the respective camera types
 UndistortFOV::UndistortFOV(const char* configFileName, bool noprefix)
 {
     printf("Creating FOV undistorter\n");

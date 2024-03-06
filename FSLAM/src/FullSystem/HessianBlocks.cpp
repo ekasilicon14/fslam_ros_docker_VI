@@ -72,8 +72,15 @@ PointHessian::PointHessian(const ImmaturePoint* const rawPoint, CalibHessian* Hc
 	memcpy(weights, rawPoint->weights, sizeof(float)*n);
 	energyTH = rawPoint->energyTH;
 
-	efPoint=0;
+	colourValid = false;
 
+	if(rawPoint->colourValid){
+		colourValid = true;
+		for(int i = 0; i < PATTERNNUM; i++){
+			colour3[i] = rawPoint->colour3[i];
+		}
+	}
+	efPoint=0;
 }
 
 
@@ -253,6 +260,30 @@ void FrameHessian::makeImages(float* color, CalibHessian* HCalib)
 	}
 }
 
+void FrameHessian::makeColourImages(float* r, float* g ,float* b)
+{
+	colourValid = true;
+	dI_c = new Eigen::Vector3f[wG[0]*hG[0]];
+	std::fill(dI_c, dI_c+wG[0]*hG[0], Eigen::Vector3f(0,0,0));
+
+	int w=wG[0];
+	int h=hG[0];
+	for(int i=0;i<w*h;i++){
+		dI_c[i][0] = r[i];
+		dI_c[i][1] = g[i];
+		dI_c[i][2] = b[i];
+	}
+}
+
+/**
+ * @brief Set values that are commonly used in the optimization
+ * 
+ * Transformation matrixes, calibration matrix, and photogrammetric values
+ * 
+ * @param host 
+ * @param target 
+ * @param HCalib 
+ */
 void FrameFramePrecalc::set(FrameHessian* host, FrameHessian* target, CalibHessian* HCalib )
 {
 	this->host = host;

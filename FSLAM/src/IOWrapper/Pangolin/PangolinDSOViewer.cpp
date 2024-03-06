@@ -164,7 +164,7 @@ void PangolinDSOViewer::run()
 		BindToContext(main_window_name);
 
 	glEnable(GL_DEPTH_TEST);
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+	glClearColor(0.36, 0.36, 0.55, 0.0);
 	
 	// glEnable(GL_POINT_SMOOTH);
 	// glEnable(GL_BLEND);
@@ -174,7 +174,7 @@ void PangolinDSOViewer::run()
 	{
 		// Clear entire screen
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-		glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+		glClearColor(0.36, 0.36, 0.55, 0.0);
 
 		if (setting_render_display3D->Get())
 		{
@@ -744,11 +744,19 @@ void PangolinDSOViewer::setInternalImageData(std::unique_ptr<InternalImage> &Int
 		InternalImage->Height = h;
     }
 
+	if (!image->colourValid){
 	for(int i=0, j=0;i<w*h*3;i+=3, ++j)
 		InternalImage->Image[i] =
 		InternalImage->Image[i+1] =
 		InternalImage->Image[i+2] =
 			image->dI[j][0]*0.8 > 255.0f ? 255 :  image->dI[j][0]*0.8;
+	} else {
+	for(int i=0, j=0;i<w*h*3;i+=3, ++j){
+		InternalImage->Image[i] = image->dI_c[j][0]*0.8 > 255.0f ? 255.0 : image->dI_c[j][0]*0.8;
+		InternalImage->Image[i+1] = image->dI_c[j][1]*0.8 > 255.0f ? 255.0 : image->dI_c[j][1]*0.8;
+		InternalImage->Image[i+2] = image->dI_c[j][2]*0.8 > 255.0f ? 255.0 : image->dI_c[j][2]*0.8;
+		}	
+	}
 
 	int radiusMp = 2;
 	int radiusPt = 1;

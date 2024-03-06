@@ -126,10 +126,12 @@ public:
 	 * @param vignetteFile 		Path to photometric vignette correction file
 	 * @param use16BitPassed 	16 or 8 bit images
 	 */
-	ImageFolderReader(std::string path, std::string calibFile, std::string gammaFile, std::string vignetteFile)
+	ImageFolderReader(std::string path, std::string calibFile, std::string gammaFile, std::string vignetteFile, bool use16BitPassed, bool useColourPassed)
 	{
 		this->path = path;
 		this->calibfile = calibFile;
+		use16Bit = use16BitPassed;
+		useColour = useColourPassed;
 
 #if HAS_ZIPLIB
 		ziparchive=0;
@@ -357,6 +359,7 @@ private:
 	 */
 	MinimalImageB* getImageRaw_internal(int id, int unused)
 	{
+	    assert(!use16Bit);
 		if(!isZipped)
 		{
 			// CHANGE FOR ZIP FILE
@@ -392,6 +395,19 @@ private:
 		}
 	}
 
+	MinimalImageB* getImageRaw3_internal(int id, int unused, MinimalImageB*& rimg, MinimalImageB*& gimg, MinimalImageB*& bimg)
+	{
+	    assert(!use16Bit);
+		if(!isZipped)
+		{
+			return IOWrap::readImageRGB_8U_split(files[id], rimg, gimg, bimg);
+		}
+		else
+		{
+			printf("ERROR: Colour currently does not support .zip archive\n");
+			exit(1);
+		}
+	}
 
 	/**
 	 * @brief Reads image with exposure
@@ -405,6 +421,46 @@ private:
 	 */
 	ImageAndExposure* getImage_internal(int id, int unused)
 	{
+	    if(use16Bit)
+        {
+			if(useColour){
+				printf("ERROR: Colour currently does not support 16-bit\n");
+				exit(1);
+			} else {
+				MinimalImage<unsigned short>* minimg = IOWrap::readImageBW_16U(files[id]);
+				assert(minimg);
+				ImageAndExposure* ret2 = undistort->undistort<unsigned short>(
+						minimg,
+						(exposures.size() == 0 ? 1.0f : exposures[id]),
+						(timestamps.size() == 0 ? 0.0 : timestamps[id]),
+						1.0f / 256.0f);
+				delete minimg;
+				return ret2;
+			}
+        }
+		else
+        {
+			if(useColour){
+				MinimalImageB* rimg; MinimalImageB* gimg; MinimalImageB* bimg;
+				MinimalImageB* minimg = getImageRaw3_internal(id, 0, rimg, gimg, bimg);
+
+				ImageAndExposure* ret2 = undistort->undistort<unsigned char>(
+						minimg,
+						(exposures.size() == 0 ? 1.0f : exposures[id]),
+						(timestamps.size() == 0 ? 0.0 : timestamps[id]),
+						1, true);
+
+				undistort->undistort_colour<unsigned char>(
+					rimg, gimg, bimg,
+					ret2,
+					(exposures.size() == 0 ? 1.0f : exposures[id]),
+					(timestamps.size() == 0 ? 0.0 : timestamps[id])
+				);
+				
+				delete minimg;
+				delete rimg; delete gimg; delete bimg;
+				return ret2;
+			} else {
 		MinimalImageB* minimg = getImageRaw_internal(id, 0);
 		ImageAndExposure* ret2 = undistort->undistort<unsigned char>(
 				minimg,
@@ -412,6 +468,8 @@ private:
 				(timestamps.size() == 0 ? 0.0 : timestamps[id]));
 		delete minimg;
 		return ret2;
+	}
+        }
 	}
 
 	/**
@@ -501,6 +559,8 @@ private:
 	std::string calibfile;
 
 	bool isZipped;
+	bool use16Bit;
+	bool useColour;
 
 #if HAS_ZIPLIB
 	zip_t* ziparchive;

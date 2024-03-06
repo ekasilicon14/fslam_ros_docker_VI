@@ -34,6 +34,7 @@ namespace IOWrap
 
 MinimalImageB* readImageBW_8U(std::string filename);
 MinimalImageB3* readImageRGB_8U(std::string filename);
+MinimalImageB* readImageRGB_8U_split(std::string filename, MinimalImageB*& r, MinimalImageB*& g, MinimalImageB*& b);
 MinimalImage<unsigned short>* readImageBW_16U(std::string filename);
 
 

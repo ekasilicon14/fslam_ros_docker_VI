@@ -37,19 +37,43 @@ public:
 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 	float* image;			// irradiance. between 0 and 256
 	float *PhoUncalibImage;
+
+	float* r_image;
+	float* g_image;
+	float* b_image;
+	bool useColour;
+
 	int w, h; // width and height;
 	double timestamp;
 	float exposure_time;	// exposure time in ms.
-	inline ImageAndExposure(int w_, int h_, double timestamp_) : w(w_), h(h_), timestamp(timestamp_)
+	inline ImageAndExposure(int w_, int h_, double timestamp_=0, bool useColourPassed = false) : w(w_), h(h_), timestamp(timestamp_)
 	{
 		image = new float[w*h];
 		PhoUncalibImage = new float[w * h];
+
+		useColour = useColourPassed;
+
+		if (useColour){
+			r_image = new float[w*h];
+			g_image = new float[w*h];
+			b_image = new float[w*h];
+		} else {
+			r_image = nullptr;
+			g_image = nullptr;
+			b_image = nullptr;	
+		}
 		exposure_time = 1;
 	}
 	inline ~ImageAndExposure()
 	{
 		delete[] image;
 		delete[] PhoUncalibImage;
+
+		if (useColour){
+			delete[] r_image;
+			delete[] g_image;
+			delete[] b_image;
+		}
 	}
 
 	inline void copyMetaTo(ImageAndExposure &other)
@@ -59,9 +83,17 @@ public:
 
 	inline ImageAndExposure* getDeepCopy()
 	{
-		ImageAndExposure* img = new ImageAndExposure(w,h,timestamp);
+		ImageAndExposure* img = new ImageAndExposure(w,h,timestamp,useColour);
 		img->exposure_time = exposure_time;
 		memcpy(img->image, image, w*h*sizeof(float));
+
+		if (useColour){
+			img->useColour = useColour;
+			memcpy(img->r_image, r_image, w*h*sizeof(float));
+			memcpy(img->g_image, g_image, w*h*sizeof(float));
+			memcpy(img->b_image, b_image, w*h*sizeof(float));
+		}
+
 		return img;
 	}
 };

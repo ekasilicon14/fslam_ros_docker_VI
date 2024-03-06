@@ -45,6 +45,10 @@ ImmaturePoint::ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, Ca
 
 	gradH.setZero();
 
+	colourValid = false;
+	if(host->colourValid) colourValid = true;
+
+	// Add all pixels in the pattern to the point
 	for(int idx=0;idx<PATTERNNUM;idx++)
 	{
 		int dx = PATTERNP[idx][0];
@@ -52,7 +56,14 @@ ImmaturePoint::ImmaturePoint(int u_, int v_, FrameHessian* host_, float type, Ca
 
 		// ptc is (pixel intensity, dx, dy)
 		Vec3f ptc = getInterpolatedElement33BiLin(host->dI, u+dx, v+dy,wG[0]);
-		color[idx] = ptc[0];
+		color[idx] = ptc[0]; // Set pixel internsity
+
+		if(colourValid){
+			int u_int = static_cast<int>(u);
+			int v_int = static_cast<int>(v);
+			Vec3f ptc_3 = host->dI_c[u_int+dx+(v_int+dy)*wG[0]];
+			colour3[idx] = ptc_3;
+		}
 
 		if(!std::isfinite(color[idx])) {energyTH=NAN; return;}
 

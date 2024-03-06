@@ -1,3 +1,28 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #pragma once
 
 #include "util/ImageAndExposure.h"
@@ -24,8 +49,7 @@ public:
 	// affine normalizes values to 0 <= I < 256.
 	// raw irradiance = a*I + b.
 	// output will be written in [output].
-	// template<typename T> void processFrame(T* image_in, float exposure_time, float factor=1);
-	void processFrame(float* image_in, ImageAndExposure* output, float exposure_time, float factor=1);
+	void processFrame(float* image_in, ImageAndExposure* output, float exposure_time, float factor=1, bool setMeta = true);
 
 	void unMapFloatImage(float* image);
 
@@ -33,7 +57,7 @@ public:
 
 	float* getG() {if(!valid) return 0; else return G;};
 private:
-    float G[256*256];
+    float G[256*256]; // Large enough to handle 16 bit images
     int GDepth;
 	float* vignetteMap;
 	float* vignetteMapInv;
@@ -58,7 +82,9 @@ public:
 	inline bool isValid() {return valid;};
 
 	template<typename T>
-	ImageAndExposure* undistort(const MinimalImage<T>* image_raw, float exposure=0, double timestamp=0, float factor=1) const;
+	ImageAndExposure* undistort(const MinimalImage<T>* image_raw, float exposure=0, double timestamp=0, float factor=1, bool useColourPassed = false) const;
+	template<typename T>
+	void undistort_colour(MinimalImage<T>* r_image, MinimalImage<T>* g_image, MinimalImage<T>* b_image, ImageAndExposure* out_image, float exposure=0, double timestamp=0, float factor=1);
 	static Undistort* getUndistorterForFile(std::string configFilename, std::string gammaFilename, std::string vignetteFilename);
 
 	void loadPhotometricCalibration(std::string file, std::string noiseImage, std::string vignetteImage);
