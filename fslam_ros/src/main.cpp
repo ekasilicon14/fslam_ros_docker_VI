@@ -38,6 +38,7 @@ std::string gammaFile = "";
 std::string saveFile = "";
 std::string vocabPath = "";
 bool useSampleOutput=false;
+bool useColour = false;
 int mode = 1;
 int preset= 1;
 
@@ -139,6 +140,26 @@ void parseArgument(char* arg)
 		return;
 	}
 
+	if(1==sscanf(arg,"colour=%d",&option))
+	{
+		if(option==1)
+		{
+			useColour = true;
+			printf("Using Colour\n");
+		}
+		return;
+	}
+
+	if(1==sscanf(arg,"outpc=%d",&option))
+	{
+		if(option==1)
+		{
+			outputPC = true;
+			printf("Outputting Pointcloud\n");
+		}
+		return;
+	}
+
 	if (1==sscanf(arg,"mode=%d",&option))
 	{
 		if(option==1)
@@ -190,18 +211,7 @@ void parseArgument(char* arg)
 			setting_logStuff = false;
 		}
 	}
-	if(LoopClosure && !vocabPath.empty())
-	{
-		Vocab.load(vocabPath.c_str());
-		printf("Loop Closure ON and loading Vocabulary from %s!\n", vocabPath.c_str());
-		if (Vocab.empty())
-		{
-			printf("failed to load vocabulary! Exit\n");
-			exit(1);
-		}
-	}
 
-	printf("could not parse argument \"%s\"!!\n", arg);
 }
 
 
@@ -214,9 +224,16 @@ int frameID = 0;
 
 void vidCb(const sensor_msgs::ImageConstPtr img)
 {
-	cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
-	assert(cv_ptr->image.type() == CV_8U);
-	assert(cv_ptr->image.channels() == 1);
+	cv_bridge::CvImagePtr cv_ptr;
+	if(!useColour){
+		cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::MONO8);
+		assert(cv_ptr->image.type() == CV_8U);
+		assert(cv_ptr->image.channels() == 1);
+	} else{
+		cv_ptr = cv_bridge::toCvCopy(img, sensor_msgs::image_encodings::BGR8);
+		assert(cv_ptr->image.type() == CV_8UC3);
+		assert(cv_ptr->image.channels() == 3);
+	}
 
 
 	if(setting_fullResetRequested)
@@ -237,8 +254,35 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 		setting_fullResetRequested=false;
 	}
 
-	MinimalImageB minImg((int)cv_ptr->image.cols, (int)cv_ptr->image.rows,(unsigned char*)cv_ptr->image.data);
-	ImageAndExposure* undistImg = undistorter->undistort<unsigned char>(&minImg, 1,0, 1.0f);
+	ImageAndExposure* undistImg;
+	if (!useColour){
+		MinimalImageB minImg((int)cv_ptr->image.cols, (int)cv_ptr->image.rows,(unsigned char*)cv_ptr->image.data);
+		undistImg = undistorter->undistort<unsigned char>(&minImg, 1,0, 1.0f);
+	} else {
+		MinimalImageB* rimg; MinimalImageB* gimg; MinimalImageB* bimg;
+
+		cv::Mat channels[3];
+    	cv::split(cv_ptr->image, channels);
+
+		rimg = new MinimalImageB(channels[2].cols, channels[2].rows);
+		gimg = new MinimalImageB(channels[1].cols, channels[1].rows);
+		bimg = new MinimalImageB(channels[0].cols, channels[0].rows);
+		memcpy(bimg->data, channels[2].data, channels[2].rows*channels[2].cols);
+		memcpy(gimg->data, channels[1].data, channels[1].rows*channels[1].cols);
+		memcpy(rimg->data, channels[0].data, channels[0].rows*channels[0].cols);
+
+		cv::Mat grey_m;
+		cv::cvtColor(cv_ptr->image, grey_m, CV_BGR2GRAY);
+
+		MinimalImageB* img = new MinimalImageB(grey_m.cols, grey_m.rows);
+		memcpy(img->data, grey_m.data, grey_m.rows*grey_m.cols);
+
+		undistImg = undistorter->undistort<unsigned char>(img,1,0,1.0f,true);
+		undistorter->undistort_colour<unsigned char>(rimg, gimg, bimg, undistImg, 1, 0);
+
+		delete rimg; delete gimg; delete bimg; delete img;
+	}
+
 	undistImg->timestamp=img->header.stamp.toSec(); // relay the timestamp to FSLAM
 	fullSystem->addActiveFrame(undistImg, frameID);
 	frameID++;
@@ -302,7 +346,7 @@ int main( int argc, char** argv )
 		Vocabpnt = new DBoW3::Vocabulary();
 		Vocabpnt->load(vocabPath.c_str());
 		LoopClosure = true; 
-		printf("loaded Vocabulary from %s!\n", VocabFile.c_str());
+		printf("loaded Vocabulary from %s!\n", vocabPath.c_str());
 		if (Vocabpnt->empty())
 		{
 			printf("failed to load vocabulary! Exit\n");
@@ -402,6 +446,8 @@ int main( int argc, char** argv )
 			
 	
 	fullSystem->printResult("result.txt"); 
+	if (outputPC) fullSystem->printPC("PC.PCD");
+
 	//if(viewer != 0)
 	//    viewer->run();
 	//Clean-up and exit
