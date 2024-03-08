@@ -285,6 +285,7 @@ void PangolinDSOViewer::close()
 
 void PangolinDSOViewer::join()
 {
+	close();
 	runThread.join();
 	printf("JOINED Pangolin thread!\n");
 }
@@ -453,7 +454,7 @@ void PangolinDSOViewer::DrawIndirectMap(bool bDrawGraph)
 		// glBegin(GL_POINTS);
 		// glColor3f(0.0,0.0,0.0);
 		Vec3b blue(0, 0, 255);
-		Vec3b red(255, 0, 0);
+		Vec3b red(0, 255, 0);
 
 		double scaledVarThresh = settings_scaledVarTH->Get();
 		double absVarTH = settings_absVarTH->Get();

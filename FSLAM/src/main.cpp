@@ -79,6 +79,7 @@ int main(int argc, char **argv)
         ("C,colour", "Read colour images", cxxopts::value<bool>()->default_value("false"))
 		("S,use16bit", "Read 16 bit images", cxxopts::value<bool>()->default_value("false"))
 		("P,outPC", "Output point cloud", cxxopts::value<bool>()->default_value("false"))
+		("E,pauseEnd", "Pause at end", cxxopts::value<bool>()->default_value("false"))
 		("h,help", "Print usage")
     ;
 
@@ -109,6 +110,8 @@ int main(int argc, char **argv)
 
 	bool use_colour = result["colour"].as<bool>();
 	bool use_16bit = result["use16bit"].as<bool>(); 
+
+	bool pauseEnd = result["pauseEnd"].as<bool>(); 
 
 	if(source.empty() || calib.empty()) { std::cout<< "Path to images or calibration not provided! cannot function without them. exit." << std::endl; return(0);}
 
@@ -406,6 +409,11 @@ int main(int argc, char **argv)
             tmlog.close();
         }
 
+		if(!pauseEnd){
+		for(IOWrap::Output3DWrapper* ow : fullSystem->outputWrapper)
+		{
+			ow->join();
+		}}
     });
 
 
@@ -416,7 +424,7 @@ int main(int argc, char **argv)
 
 	for(IOWrap::Output3DWrapper* ow : fullSystem->outputWrapper)
 	{
-		ow->join();
+		if(pauseEnd) ow->join();
 		delete ow;
 	}
 
