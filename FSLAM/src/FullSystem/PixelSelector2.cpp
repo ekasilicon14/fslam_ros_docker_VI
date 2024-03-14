@@ -258,6 +258,7 @@ int PixelSelector::makeMaps(
 		currentPotential = idealPotential;
 		return makeMaps(fh,map_out, density, recursionsLeft-1, thFactor);
 		}
+	// Too many points if quotia < 0.25
 		else if(recursionsLeft>0 && quotia < 0.25)
 		{
 		// Re-sample to get less points!
@@ -404,6 +405,7 @@ Eigen::Vector3i PixelSelector::select(const FrameHessian* const fh,
 	// The highest gradient for each grid is chosen
 	// Once a point is chosen in a grid, pixels cannot be chosen from that grid in higher pyramid levels
 	int n3=0, n2=0, n4=0;
+	// indirect!: Track indirect features
 	auto frame = fh->shell->frame;
 	if(frame)
 	{
@@ -445,6 +447,7 @@ Eigen::Vector3i PixelSelector::select(const FrameHessian* const fh,
 
 					// Don't use pixels too close to the border
 					if(xf<4 || xf>=w-5 || yf<4 || yf>h-4) continue;
+					// indirect!: Don't double track indirect features
 					if( map_out[idx]>4 )
 						{ bestVal2 = 1e10; bestIdx2 = idx; bestIdx3 = -2; bestIdx4=-2;}
 
@@ -496,6 +499,7 @@ Eigen::Vector3i PixelSelector::select(const FrameHessian* const fh,
 
 				if(bestIdx2>0)
 				{
+					// indirect!: Don't double track indirect features
 					if( map_out[bestIdx2] <= 4 )
 						map_out[bestIdx2] = 1;
 					bestVal3 = 1e10;

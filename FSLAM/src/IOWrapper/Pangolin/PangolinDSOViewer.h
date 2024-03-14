@@ -148,6 +148,7 @@ private:
 	pangolin::Var<bool> *_Pause;
 	pangolin::Var<bool> *bFollow;
 	pangolin::Var<int> *settings_pointCloudMode;
+	pangolin::Var<bool> *settings_showDrawPC;
 	pangolin::Var<double> *settings_scaledVarTH;
 	pangolin::Var<double> *settings_absVarTH;
 	pangolin::Var<double> *settings_minRelBS;

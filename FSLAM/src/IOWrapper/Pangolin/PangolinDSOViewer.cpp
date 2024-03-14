@@ -92,7 +92,8 @@ PangolinDSOViewer::PangolinDSOViewer(int w, int h, bool startRunThread)
     HidePanel = new Var<bool>("ui.Hide Settings", false, false);
 	
 	settings_pointCloudMode = new Var<int> ("ui.PC_mode",1,0,2,false);
-	bFollow = new Var<bool>("ui.Follow Camera", true, true);
+	settings_showDrawPC = new Var<bool>("ui.PC_OnOff",true,true);
+	//bFollow = new Var<bool>("ui.Follow Camera", true, true);
 	settings_showKFCameras = new Var<bool>("ui.KFCam",false,true);
 	settings_showCurrentCamera = new Var<bool> ("ui.CurrCam",true,true);
 	settings_showTrajectory = new pangolin::Var<bool> ("ui.Trajectory",true,true);
@@ -203,7 +204,7 @@ void PangolinDSOViewer::run()
 
 				refreshed += (int)(fh->refreshPC((refreshed < 10 || overWriteRefresh), settings_scaledVarTH->Get(), settings_absVarTH->Get(),
 						settings_pointCloudMode->Get(), settings_minRelBS->Get(), settings_sparsity->Get()));
-				fh->drawPC(1);
+				if (settings_showDrawPC->Get()) fh->drawPC(1);
 			}
 
 			if(settings_showCurrentCamera->Get()) currentCam->drawCam(2,0,0.2);

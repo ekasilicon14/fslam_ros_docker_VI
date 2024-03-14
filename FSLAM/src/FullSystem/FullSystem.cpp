@@ -1,3 +1,36 @@
+/**
+* This file is part of DSO, written by Jakob Engel.
+* It has been modified by Georges Younes, Daniel Asmar, John Zelek, and Yan Song Hu
+*
+* Copyright 2024 University of Waterloo and American University of Beirut.
+* Copyright 2016 Technical University of Munich and Intel.
+* Developed by Jakob Engel <engelj at in dot tum dot de>,
+* for more information see <http://vision.in.tum.de/dso>.
+* If you use this code, please cite the respective publications as
+* listed on the above website.
+*
+* DSO is free software: you can redistribute it and/or modify
+* it under the terms of the GNU General Public License as published by
+* the Free Software Foundation, either version 3 of the License, or
+* (at your option) any later version.
+*
+* DSO is distributed in the hope that it will be useful,
+* but WITHOUT ANY WARRANTY; without even the implied warranty of
+* MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+* GNU General Public License for more details.
+*
+* You should have received a copy of the GNU General Public License
+* along with DSO. If not, see <http://www.gnu.org/licenses/>.
+*/
+
+/*
+ * KFBuffer.cpp
+ *
+ *  Created on: Jan 7, 2014
+ *      Author: engelj
+ */
+
+
 #include "FullSystem/FullSystem.h"
  
 #include "stdio.h"
@@ -46,7 +79,13 @@ unsigned long PointHessian::totalInstantCounter=0;
 int CalibHessian::instanceCounter=0;
 
 
-
+/**
+ * @brief Construct a new FullSystem Object
+ * 
+ * @param linearizeOperationPassed 
+ * @param imuCalibration 
+ * @param imuSettings 
+ */
 FullSystem::FullSystem()
 {
 
@@ -121,6 +160,7 @@ FullSystem::FullSystem()
 	coarseInitializer = new CoarseInitializer(wG[0], hG[0]);
 	pixelSelector = new PixelSelector(wG[0], hG[0]);
 
+	// indirect!: Additional classes for loop closure
 	detector = std::make_shared<FeatureDetector>();
 	globalMap = std::make_shared<Map>();
 	matcher = std::make_shared<Matcher>();
@@ -158,6 +198,7 @@ FullSystem::FullSystem()
 
 	linearizeOperation=true;
 	runMapping=true;
+	// MAPPING THREAD IS STARTED HERE
 	mappingThread = boost::thread(&FullSystem::mappingLoop, this);
 	lastRefStopID = 0;
 
@@ -167,6 +208,10 @@ FullSystem::FullSystem()
 	maxIdJetVisTracker = -1;
 }
 
+/**
+ * @brief Destroy the FullSystem Object
+ * 
+ */
 FullSystem::~FullSystem()
 {
 	blockUntilMappingIsFinished();
@@ -256,6 +301,7 @@ void FullSystem::printResult(std::string file, bool printSim)
 	int active = 0;
 	int immature = 0;
 
+	// indirect!: Count indirect points for printing
 	for (auto it : allKeyFramesHistory)
 	{
 		if(!it->frame)
@@ -276,36 +322,6 @@ void FullSystem::printResult(std::string file, bool printSim)
 
 
 	boost::unique_lock<boost::mutex> lock(trackMutex);
-	// boost::unique_lock<boost::mutex> crlock(shellPoseMutex);
-	
-	// SE3 Twc;
-	// if(printSim)
-	// {
-	// 	std::ofstream myfile(file + "_loop");
-	// 	myfile.open (file.c_str());
-	// 	myfile << std::setprecision(15);
-
-	// 	Sim3 Swc;
-	// 	for (FrameShell *s : allFrameHistory)
-	// 	{
-	// 		if(!s->poseValid) 
-	// 		continue;
-
-	// 		if(setting_onlyLogKFPoses && s->marginalizedAt == s->id) 
-	// 			continue;
-			
-	// 		Swc = s->getPoseOptiInv();
-	// 		Twc = SE3(Swc.rotationMatrix(), Swc.translation());
-
-	// 		myfile << s->timestamp <<
-	// 		" " << Twc.translation().transpose()<<
-	// 		" " << Twc.so3().unit_quaternion().x()<<
-	// 		" " << Twc.so3().unit_quaternion().y()<<
-	// 		" " << Twc.so3().unit_quaternion().z()<<
-	// 		" " << Twc.so3().unit_quaternion().w() << "\n";
-	// 	}
-	// 	myfile.close();
-	// }
 
 	std::ofstream myfile;
 	myfile.open (file.c_str());
@@ -381,7 +397,20 @@ void FullSystem::printPC(std::string file)
 	myfile.close();
 }
 
-
+/**
+ * @brief Determines best track by tracking possible poses using the coarseTracker class
+ * Has three steps
+ * 1. Creates a list of likely poses to test
+ * 2. Passes possible poses to be tracked by the coarseTracker class till a good track is returned
+ * 3. Update variables
+ * 
+ * If a good track cannot be found, either use the estimated pose from the IMU or assume constant motion
+ * If the tracking residual grows too large, this function will kill the program
+ * 
+ * @param fh 						Current frame
+ * @param referenceToFrameHint 		Pose derived from IMU measurements
+ * @return std::pair<Vec4, bool> 	Achieved residual, flow vector, and if the tracking is good
+ */
 Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 {
 
@@ -411,7 +440,7 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 		}
 		SE3 fh_2_slast = slast_2_sprelast;// assumed to be the same as fh_2_slast.
 
-		if(nIndmatches > 20 && isUsable) //if indirect tracking is good use it as prior for Direct tracking
+		if(nIndmatches > 20 && isUsable) // indirect!: if indirect tracking is good use it as prior for Direct tracking
 		{
 			lastF_2_fh_tries.push_back(fh->shell->getPoseInverse() * lastF->shell->getPose());
 		}
@@ -421,7 +450,7 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 		lastF_2_fh_tries.push_back(fh_2_slast.inverse() * fh_2_slast.inverse() * lastF_2_slast);	// assume double motion (frame skipped)
 		lastF_2_fh_tries.push_back(SE3::exp(fh_2_slast.log()*0.5).inverse() * lastF_2_slast); // assume half motion.
 		lastF_2_fh_tries.push_back(lastF_2_slast); // assume zero motion.
-		lastF_2_fh_tries.push_back(SE3()); // assume zero motion FROM KF.
+        lastF_2_fh_tries.push_back(SE3()); 															// assume zero motion from KF.
 
 
 		// just try a TON of different initializations (all rotations). In the end,
@@ -465,28 +494,30 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 	}
 
 
-	Vec3 flowVecs = Vec3(100,100,100);
+	// ============== Test all of the pose guesses ===================
+	Vec3 flowVecs = Vec3(100,100,100); // Flow vector of tracked motion
 	SE3 lastF_2_fh = SE3();
 	AffLight aff_g2l = AffLight(0,0);
 
 
-	// as long as maxResForImmediateAccept is not reached, I'll continue through the options.
-	// I'll keep track of the so-far best achieved residual for each level in achievedRes.
+	// As long as maxResForImmediateAccept is not reached, it will continue through the options.
+	// Keep track of the so-far best achieved residual for each level in achievedRes.
 	// If on a coarse level, tracking is WORSE than achievedRes, we will not continue to save time.
 
 
 	Vec5 achievedRes = Vec5::Constant(NAN);
 	bool haveOneGood = false;
 	int tryIterations=0;
-	for(unsigned int i=0;i<lastF_2_fh_tries.size();i++)
+	for(unsigned int i=0;i<lastF_2_fh_tries.size();i++) // Try tracking for all poses in lastF_2_fh_tries
 	{
 		AffLight aff_g2l_this = aff_last_2_l;
 		SE3 lastF_2_fh_this = lastF_2_fh_tries[i];
 		// bool trackIndirect = trackNewestCoarse(fh->shell->frame, lastF->shell->frame, Test, pyrLevelsUsed - 1);
+		// Tracking is done by the coarseTracker class		
 		bool trackingIsGood = coarseTracker->trackNewestCoarse(
 			fh, lastF_2_fh_this, aff_g2l_this,
 			pyrLevelsUsed - 1,
-			achievedRes); // in each level has to be at least as good as the last try.
+			achievedRes);	// in each level this has to be at least as good as the last try.
 		tryIterations++;
 
 		if(i != 0)
@@ -508,7 +539,11 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 		}
 
 
-		// do we have a new winner?
+		// ============== Update variables if there is a good track ===================
+		// Track for given motion is sucessful is:
+		// 1. Tracking does not return invalid values
+		// 2. Residual is finite
+		// 3. Residual is smaller than last achieved residual
 		if(trackingIsGood && std::isfinite((float)coarseTracker->lastResiduals[0]) && !(coarseTracker->lastResiduals[0] >=  achievedRes[0]))
 		{
 			//printf("take over. minRes %f -> %f!\n", achievedRes[0], coarseTracker->lastResiduals[0]);
@@ -518,17 +553,18 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 			haveOneGood = true;
 		}
 
-		// take over achieved res (always).
+		// Set achieved residuals to new values
 		if(haveOneGood)
 		{
-			for(int i=0;i<5;i++)
+			for(int j=0;j<5;j++)
 			{
-				if(!std::isfinite((float)achievedRes[i]) || achievedRes[i] > coarseTracker->lastResiduals[i])	// take over if achievedRes is either bigger or NAN.
-					achievedRes[i] = coarseTracker->lastResiduals[i];
+				if(!std::isfinite((float)achievedRes[j]) || achievedRes[j] > coarseTracker->lastResiduals[j])
+					achievedRes[j] = coarseTracker->lastResiduals[j];
 			}
 		}
 
 
+		// Stop testing other tracks if result is good enough
         if(haveOneGood &&  achievedRes[0] < lastCoarseRMSE[0]*setting_reTrackThreshold)
             break;
 
@@ -580,6 +616,14 @@ Vec5 FullSystem::trackNewCoarse(FrameHessian* fh, bool writePose)
 	return Output;
 }
 
+/**
+ * @brief Traces all the immature points
+ * 
+ * Because immature points are only made for new frames,
+ * the number of immature points per frame will decrease over time
+ * 
+ * @param fh Current frame
+ */
 void FullSystem::traceNewCoarse(FrameHessian* fh)
 {
 	boost::unique_lock<boost::mutex> lock(mapMutex);
@@ -592,18 +636,21 @@ void FullSystem::traceNewCoarse(FrameHessian* fh)
 	K(0,2) = Hcalib.cxl();
 	K(1,2) = Hcalib.cyl();
 
-	for(FrameHessian* host : frameHessians)		// go through all active frames
+	for(FrameHessian* host : frameHessians)	// Go through all active frames
 	{
 
+		// Get SE(3) matrix from old to new position
 		SE3 hostToNew = fh->PRE_worldToCam * host->PRE_camToWorld;
+		// Seperate into rotation and translation parts, multiply by K at this stage for calculational efficency
 		Mat33f KRKi = K * hostToNew.rotationMatrix().cast<float>() * K.inverse();
 		Vec3f Kt = K * hostToNew.translation().cast<float>();
 
+		// Get matrix that transforms points from one frame to another
 		Vec2f aff = AffLight::fromToVecExposure(host->ab_exposure, fh->ab_exposure, host->aff_g2l(), fh->aff_g2l()).cast<float>();
 
-		for(ImmaturePoint* ph : host->immaturePoints)
+		for(ImmaturePoint* ph : host->immaturePoints) // For all immature points in active host frame
 		{
-			ph->traceOn(fh, KRKi, Kt, aff, &Hcalib, false );
+			ph->traceOn(fh, KRKi, Kt, aff, &Hcalib, false ); // trace the immature point
 
 			if(ph->lastTraceStatus==ImmaturePointStatus::IPS_GOOD) trace_good++;
 			if(ph->lastTraceStatus==ImmaturePointStatus::IPS_BADCONDITION) trace_badcondition++;
@@ -627,6 +674,18 @@ void FullSystem::traceNewCoarse(FrameHessian* fh)
 
 
 
+/**
+ * @brief Helper function for activatePointsMT
+ * 
+ * Does the type conversion from ImmaturePoints to PointHessians
+ * 
+ * @param optimized 
+ * @param toOptimize 
+ * @param min 
+ * @param max 
+ * @param stats 
+ * @param tid 
+ */
 void FullSystem::activatePointsMT_Reductor(
 		std::vector<PointHessian*>* optimized,
 		std::vector<ImmaturePoint*>* toOptimize,
@@ -642,9 +701,15 @@ void FullSystem::activatePointsMT_Reductor(
 
 
 
+/**
+ * @brief Converts immature points to active points
+ * 
+ */
 void FullSystem::activatePointsMT()
 {
 
+	// ============== Update variables for desired point density ===================
+	// Change the currentMinActDist in order to achieve the desired point number
 	if(ef->nPoints < setting_desiredPointDensity*0.66)
 		currentMinActDist -= 0.8;
 	if(ef->nPoints < setting_desiredPointDensity*0.8)
@@ -663,6 +728,7 @@ void FullSystem::activatePointsMT()
 	if(ef->nPoints > setting_desiredPointDensity)
 		currentMinActDist += 0.1;
 
+	// Max and min currentMinActDist values
 	if(currentMinActDist < 0) currentMinActDist = 0;
 	if(currentMinActDist > 4) currentMinActDist = 4;
 
@@ -672,9 +738,10 @@ void FullSystem::activatePointsMT()
 
 
 
+	// ============== Loop through all of the immature points in active frames ===================
 	FrameHessian* newestHs = frameHessians.back();
 
-	// make dist map.
+	// Make dist map.
 	coarseDistanceMap->makeK(&Hcalib);
 	coarseDistanceMap->makeDistanceMap(frameHessians, newestHs);
 
@@ -685,19 +752,21 @@ void FullSystem::activatePointsMT()
 
 	for(FrameHessian* host : frameHessians)		// go through all active frames
 	{
-		if(host == newestHs) continue;
+		if(host == newestHs) continue; // exclude newest frame
 
-		SE3 fhToNew = newestHs->PRE_worldToCam * host->PRE_camToWorld;
+		SE3 fhToNew = newestHs->PRE_worldToCam * host->PRE_camToWorld; // Transformation matrix from host to newest frame
+		// Seperate transformation matrix to rotation and translation parts
 		Mat33f KRKi = (coarseDistanceMap->K[1] * fhToNew.rotationMatrix().cast<float>() * coarseDistanceMap->Ki[0]);
 		Vec3f Kt = (coarseDistanceMap->K[1] * fhToNew.translation().cast<float>());
 
 
-		for(unsigned int i=0;i<host->immaturePoints.size();i+=1)
+		for(unsigned int i=0;i<host->immaturePoints.size();i+=1) // for every immature point in the frame
 		{
 			ImmaturePoint* ph = host->immaturePoints[i];
 			ph->idxInImmaturePoints = i;
 
-			// delete points that have never been traced successfully, or that are outlier on the last trace.
+			// ============== Delete invalid immature points ===================
+			// Delete points that have never been traced successfully, or that are outlier on the last trace.
 			if(!std::isfinite(ph->idepth_max) || ph->lastTraceStatus == IPS_OUTLIER)
 			{
 //				immature_invalid_deleted++;
@@ -707,7 +776,7 @@ void FullSystem::activatePointsMT()
 				continue;
 			}
 
-			// can activate only if this is true.
+			// Activate only if this is true.
 			bool canActivate = (ph->lastTraceStatus == IPS_GOOD
 					|| ph->lastTraceStatus == IPS_SKIPPED
 					|| ph->lastTraceStatus == IPS_BADCONDITION
@@ -732,20 +801,24 @@ void FullSystem::activatePointsMT()
 			}
 
 
-			// see if we need to activate point due to distance map.
+			// ============== Add immature point to activation list if it meets conditions ===================
+			// Determine if the point is far away enough from other points
+			// Points are only activated if it has good spacing compared to other active points
+			// once projected on the newest keyframe
 			Vec3f ptp = KRKi * Vec3f(ph->u, ph->v, 1) + Kt*(0.5f*(ph->idepth_max+ph->idepth_min));
 			int u = ptp[0] / ptp[2] + 0.5f;
 			int v = ptp[1] / ptp[2] + 0.5f;
 
-			if((u > 0 && v > 0 && u < wG[1] && v < hG[1]))
+			if((u > 0 && v > 0 && u < wG[1] && v < hG[1])) // delete point if it is out of bounds
 			{
 
 				float dist = coarseDistanceMap->fwdWarpedIDDistFinal[u+wG[1]*v] + (ptp[0]-floorf((float)(ptp[0])));
 
+				// indirect!: Also account for indirect map points
 				if(dist>=currentMinActDist* ((ph->my_type <= 4) ? ph->my_type : 1))
 				{
 					coarseDistanceMap->addIntoDistFinal(u,v);
-					toOptimize.push_back(ph);
+					toOptimize.push_back(ph); // add point to list of points to be optimized
 				}
 			}
 			else
@@ -762,6 +835,8 @@ void FullSystem::activatePointsMT()
 
 	std::vector<PointHessian*> optimized; optimized.resize(toOptimize.size());
 
+	// ============== Activate points in activation list ===================
+	// Activate points by optimizing them and converting them into PointHessians
 	if(multiThreading)
 		treadReduce.reduce(boost::bind(&FullSystem::activatePointsMT_Reductor, this, &optimized, &toOptimize, _1, _2, _3, _4), 0, toOptimize.size(), 50);
 
@@ -769,6 +844,7 @@ void FullSystem::activatePointsMT()
 		activatePointsMT_Reductor(&optimized, &toOptimize, 0, toOptimize.size(), 0, 0);
 
 
+	// Check if all the points are valid after optimization
 	for(unsigned k=0;k<toOptimize.size();k++)
 	{
 		PointHessian* newpoint = optimized[k];
@@ -776,9 +852,11 @@ void FullSystem::activatePointsMT()
 
 		if(newpoint != 0 && newpoint != (PointHessian*)((long)(-1)))
 		{
+			// Add new point into the optimization and active point list
 			newpoint->host->immaturePoints[ph->idxInImmaturePoints]=0;
 			newpoint->host->pointHessians.push_back(newpoint);
 
+			// indirect!: Process indirect points
 			if (newpoint->my_type > 4)
 			{
 				// if(ph->initIdepth_min > 0)
@@ -850,6 +928,7 @@ void FullSystem::activatePointsMT()
 		}
 	}
 
+	// Removes immature points that have been deleted from the frames
 	for (FrameHessian *host : frameHessians)
 	{
 		for(int i=0;i<(int)host->immaturePoints.size();i++)
@@ -867,15 +946,15 @@ void FullSystem::activatePointsMT()
 }
 
 
-
-
-
-
 void FullSystem::activatePointsOldFirst()
 {
 	assert(false);
 }
 
+/**
+ * @brief Flags bad points for removal
+ * 
+ */
 void FullSystem::flagPointsForRemoval()
 {
 	assert(EFIndicesValid);
@@ -905,6 +984,7 @@ void FullSystem::flagPointsForRemoval()
 			PointHessian* ph = host->pointHessians[i];
 			if(ph==0) continue;
 
+			// Remove points that have invalid depths
 			if(ph->idepth_scaled < 0 || ph->residuals.size()==0)
 			{
 				host->pointHessiansOut.push_back(ph);
@@ -914,13 +994,15 @@ void FullSystem::flagPointsForRemoval()
 				host->pointHessians[i] = 0;
 				flag_nores++;
 			}
+			// Remove points that are out of bounds or are in frames that are to be marginalized
 			else if(ph->isOOB(fhsToKeepPoints, fhsToMargPoints) || host->flaggedForMarginalization)
 			{
 				flag_oob++;
-				if(ph->isInlierNew())
+				if(ph->isInlierNew()) // Case for points with low residual values
 				{
 					flag_in++;
 					int ngoodRes=0;
+					// Linearize all
 					for(PointFrameResidual* r : ph->residuals)
 					{
 						r->resetOOB();
@@ -939,6 +1021,7 @@ void FullSystem::flagPointsForRemoval()
 						ph->efPoint->stateFlag = EFPointStatus::PS_MARGINALIZE;
 						host->pointHessiansMarginalized.push_back(ph);
 						
+						// indirect!: Remove indirect point
 						if(!ph->Mp.expired())
 							ph->Mp.lock()->setDirStatus(MapPoint::marginalized);
 					}
@@ -946,6 +1029,7 @@ void FullSystem::flagPointsForRemoval()
 					{
 						ph->efPoint->stateFlag = EFPointStatus::PS_DROP;
 						host->pointHessiansOut.push_back(ph);
+						// indirect!: Remove indirect point
 						if(!ph->Mp.expired())
 							ph->Mp.lock()->setDirStatus(MapPoint::removed);
 					}
@@ -954,6 +1038,7 @@ void FullSystem::flagPointsForRemoval()
 				{
 					host->pointHessiansOut.push_back(ph);
 					ph->efPoint->stateFlag = EFPointStatus::PS_DROP;
+					// indirect!: Remove indirect point
 					if(!ph->Mp.expired())
 						ph->Mp.lock()->setDirStatus(MapPoint::removed);
 
@@ -965,6 +1050,7 @@ void FullSystem::flagPointsForRemoval()
 		}
 
 
+		// Remove points that are flagged for removal from the pointHessians list
 		for(int i=0;i<(int)host->pointHessians.size();i++)
 		{
 			if(host->pointHessians[i]==0)
@@ -978,19 +1064,33 @@ void FullSystem::flagPointsForRemoval()
 
 }
 
-
+/**
+ * @brief Executes odometry when new frame is added
+ * 
+ * This function is the starting point for most of the other functions
+ * 
+ * The function is passed the IMU-data from the previous frame until the current frame.
+ * 
+ * @param image 
+ * @param id 
+ * @param imuData 
+ * @param gtData 
+ */
 void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 {
 
     if(isLost) return;
 	boost::unique_lock<boost::mutex> lock(trackMutex);
 
-	// =========================== add into allFrameHistory =========================
+	// =========================== Add new frame into allFrameHistory =========================
+	// Initialize variables
 	FrameHessian* fh = new FrameHessian();
 	FrameShell* shell = new FrameShell();
 
-	
+	// indirect!: Create indirect frame
+	// Indirect point are detected when frame is made
 	shell->frame = std::make_shared<Frame>(image->PhoUncalibImage, detector, &Hcalib, fh, shell, globalMap);
+	
 	// std::cout << shell->frame->nFeatures << std::endl;
 	// cv::Mat Output;
 	// shell->frame->Image.convertTo(Output, CV_8UC3);
@@ -1006,7 +1106,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 	allFrameHistory.push_back(shell);
 
 
-	// =========================== make Images / derivatives etc. =========================
+    // =========================== Place image and image settings into frame =========================
 	fh->ab_exposure = image->exposure_time;
     	fh->makeImages(image->image, &Hcalib); // Image derivative and gradient is also calculated
 	if(image->useColour){
@@ -1015,9 +1115,10 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 
 
 
-	if(!initialized)
+	// =========================== Process Image =========================
+	if(!initialized) // Need initialization case
 	{
-		// use initializer!
+		// =========================== Init using image if needed =========================
 		if(coarseInitializer->frameID<0)	// first frame set. fh is kept by coarseInitializer.
 		{
 
@@ -1041,10 +1142,10 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		}
 		return;
 	}
-	else	// do front-end operation.
+	else // do standard front-end operation.
 	{
 		
-		// =========================== SWAP tracking reference?. =========================
+		// =========================== Swap tracking reference =========================
 		if(coarseTracker_forNewKF->refFrameID > coarseTracker->refFrameID)
 		{
 			boost::unique_lock<boost::mutex> crlock(coarseTrackerSwapMutex);
@@ -1062,7 +1163,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		CheckReplacedInLastFrame();
 
 		int nMatches;
-		
+		// indirect!: Update the loop closer and indirect points
 		nMatches = matcher->SearchByProjectionFrameToFrame(shell->frame, mLastFrame, 15, true);
 
 		if (nMatches < 20)
@@ -1089,7 +1190,9 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		// nIndmatches = updatePoseOptimizationData(shell->frame, nFrametoLocalMapMatches, false);
 
 
-		//perform joint optimization here
+		// =========================== Do coarse tracking =========================
+		// Coarse Tracking is only done on only the new frame and reference frame
+		// The reference frame should be the latest keyframe
 		Vec5 tres = trackNewCoarse(fh, ! (isUsable && computedBoW) );
 		
 
@@ -1106,21 +1209,32 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 			isLost = true;
 			return;
 		}
-
+	
+		// =========================== Make keyframe or non-keyframe =========================
 		bool needToMakeKF = false;
-		if (setting_keyframesPerSecond > 0)
+		// Decide if keyframe or non-keyframe needs to be made
+		// If setting_keyframesPerSecond is set, the keyframe is made at a specific frequency
+		// Otherwise, the keyframe is made depending on specific conditions
+
+		if(setting_keyframesPerSecond > 0) // fixed keyframe rate
 		{
 			needToMakeKF = allFrameHistory.size() == 1 ||
 						   (fh->shell->timestamp - allKeyFramesHistory.back()->timestamp) > 0.95f / setting_keyframesPerSecond;
 			needToMakeKF = needToMakeKF && (tres[4] > 0.0);
 
 		}
-		else
+		else // makes keyframe under specific conditions
 		{
 			Vec2 refToFh = AffLight::fromToVecExposure(coarseTracker->lastRef->ab_exposure, fh->ab_exposure,
 													   coarseTracker->lastRef_aff_g2l, fh->shell->aff_g2l);
 
-			// BRIGHTNESS CHECK
+			// Make keyframe if:
+			// 1. If the field of view changes too much. FOV change is measured by the mean optical flow
+			// 2. If motion causes occlusions and disocclusions. This is measured by mean translation flow
+			// 3. If camera exposure is changed significantly.
+			// 4. Residual is too high.
+			// 5. If max time between keyframes is surpassed.
+			// 6. The IMU system needs a keyframe.
 			needToMakeKF = allFrameHistory.size() == 1 ||
 						   setting_kfGlobalWeight * setting_maxShiftWeightT * sqrtf((double)tres[1]) / (wG[0] + hG[0]) +
 								   setting_kfGlobalWeight * setting_maxShiftWeightR * sqrtf((double)tres[2]) / (wG[0] + hG[0]) +
@@ -1151,6 +1265,17 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		return;
 	}
 }
+
+
+/**
+ * @brief Creates a keyframe or non-keyframe
+ * 
+ * Also parses outputted frame for GUI and debugging
+ * Helper function for addActiveFrame
+ * 
+ * @param fh 
+ * @param needKF 
+ */
 void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 {
 
@@ -1192,13 +1317,20 @@ void FullSystem::deliverTrackedFrame(FrameHessian* fh, bool needKF)
 	}
 }
 
+/**
+ * @brief Map using the set of active frames
+ * 
+ * Mapping is done when a keyframe is created
+ * Runs on its own thread
+ * 
+ */
 void FullSystem::mappingLoop()
 {
 	boost::unique_lock<boost::mutex> lock(trackMapSyncMutex);
 
 	while(runMapping)
 	{
-		while(unmappedTrackedFrames.size()==0)
+		while(unmappedTrackedFrames.size()==0) // do not run if there are no frames
 		{
 			trackedFrameSignal.wait(lock);
 			if(!runMapping) return;
@@ -1208,7 +1340,7 @@ void FullSystem::mappingLoop()
 		unmappedTrackedFrames.pop_front();
 
 
-		// guaranteed to make a KF for the very first two tracked frames.
+        // Guaranteed to make a KF for the very first two tracked frames.
 		if(allKeyFramesHistory.size() <= 2)
 		{
 			lock.unlock();
@@ -1222,7 +1354,8 @@ void FullSystem::mappingLoop()
 			needToKetchupMapping=true;
 
 
-		if(unmappedTrackedFrames.size() > 0) // if there are other frames to tracke, do that first.
+		// if there are other frames to track, do that first.
+		if(unmappedTrackedFrames.size() > 0)
 		{
 			lock.unlock();
 			makeNonKeyFrame(fh);
@@ -1271,6 +1404,7 @@ void FullSystem::blockUntilMappingIsFinished()
 	trackedFrameSignal.notify_all();
 	lock.unlock();
 
+	// indirect!: Handle loop closure
 	if (loopCloser)
 	{
 		loopCloser->SetFinish(true);
@@ -1285,6 +1419,11 @@ void FullSystem::blockUntilMappingIsFinished()
 
 }
 
+/**
+ * @brief Creates a non-keyframe
+ * 
+ * @param fh 
+ */
 void FullSystem::makeNonKeyFrame( FrameHessian* fh)
 {
 	// needs to be set by mapping thread. no lock required since we are in mapping thread.
@@ -1301,6 +1440,11 @@ void FullSystem::makeNonKeyFrame( FrameHessian* fh)
 	fh = nullptr;
 }
 
+/**
+ * @brief Create a keyframe and optimize all of the active frames
+ * 
+ * @param fh 
+ */
 void FullSystem::makeKeyFrame( FrameHessian* fh)
 {
 	// needs to be set by mapping thread
@@ -1466,6 +1610,7 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 	// SearchInNeighbors(fh->shell->frame);
 	// KeyFrameCulling(fh->shell->frame);
 
+	// indirect!: Update indirect structs
 	updateLocalKeyframes(fh->shell->frame);
 	updateLocalPoints(fh->shell->frame);
 
@@ -1474,6 +1619,11 @@ void FullSystem::makeKeyFrame( FrameHessian* fh)
 }
 
 
+/**
+ * @brief Initializes the system if coarseInitializer finds good initial systems
+ * 
+ * @param newFrame 
+ */
 void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 {
 	boost::unique_lock<boost::mutex> lock(mapMutex);
@@ -1538,6 +1688,7 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 	{
 
 		Pnt *point = coarseInitializer->points[0] + i;
+		// indirect!: Indirect point handling
 		if (point->my_type <= 4)
 			if (rand() / (float)RAND_MAX > keepPercentage)
 				continue;
@@ -1560,6 +1711,7 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 		firstFrame->pointHessians.push_back(ph);
 		ef->insertPoint(ph);
 
+		// indirect!: Indirect point handling
 		if (ph->my_type > 4)
 		{
 			std::shared_ptr<MapPoint> pMP = std::make_shared<MapPoint>(ph, globalMap);
@@ -1571,6 +1723,7 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 	}
 
 
+	// indirect!: Add indirect point to global map
 	globalMap->AddKeyFrame(firstFrame->shell->frame);
 	globalMap->mvpKeyFrameOrigins.push_back(firstFrame->shell->frame);
 	
@@ -1588,8 +1741,6 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 	mLastFrame = newFrame->shell->frame;
 	globalMap->SetReferenceMapPoints(mvpLocalMapPoints);
 	
-
-
 	int nmatches = SearchLocalPoints(newFrame->shell->frame, 5, 0.8);
 	for (int i = 0; i < newFrame->shell->frame->nFeatures; ++i)
 	{
@@ -1598,6 +1749,7 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 			pMP->increaseFound();
 	}
 
+	// indirect!: Add point to loop closer
 	if (loopCloser)
 		loopCloser->InsertKeyFrame(firstFrame->shell->frame, globalMap->GetMaxMPid());
 
@@ -1605,6 +1757,14 @@ void FullSystem::initializeFromInitializer(FrameHessian* newFrame)
 	printf("INITIALIZE FROM INITIALIZER (%d pts)!\n", (int)firstFrame->pointHessians.size());
 }
 
+/**
+ * @brief Create new immature points
+ * 
+ * Only made for the newest keyframe
+ * 
+ * @param newFrame 
+ * @param gtDepth 
+ */
 void FullSystem::makeNewTraces(FrameHessian* newFrame, float* gtDepth)
 {
 	//int numPointsTotal = makePixelStatus(newFrame->dI, selectionMap, wG[0], hG[0], setting_desiredDensity);
@@ -1625,7 +1785,8 @@ void FullSystem::makeNewTraces(FrameHessian* newFrame, float* gtDepth)
 
 			
 			ImmaturePoint *impt = new ImmaturePoint(x, y, newFrame, selectionMap[i], &Hcalib);
-
+			
+			// indirect!: Indirect point handling
 			if (selectionMap[i] > 4) //getPriors
 			{
 				// if(newFrame->shell->frame->getMapPoint(selectionMap[i]-5))
@@ -1664,6 +1825,10 @@ void FullSystem::makeNewTraces(FrameHessian* newFrame, float* gtDepth)
 
 
 
+/**
+ * @brief Sets pre-calculation values for the active frames
+ * 
+ */
 void FullSystem::setPrecalcValues()
 {
 	for(FrameHessian* fh : frameHessians)
@@ -1677,6 +1842,10 @@ void FullSystem::setPrecalcValues()
 }
 
 
+/**
+ * @brief For debugging
+ * 
+ */
 void FullSystem::printLogLine()
 {
 	if(frameHessians.size()==0) return;
@@ -1725,6 +1894,10 @@ void FullSystem::printLogLine()
 
 
 
+/**
+ * @brief For debugging the energy function
+ * 
+ */
 void FullSystem::printEigenValLine()
 {
 	if(!setting_logStuff) return;
@@ -1807,6 +1980,10 @@ void FullSystem::printEigenValLine()
 
 }
 
+/**
+ * @brief For debugging the frames
+ * 
+ */
 void FullSystem::printFrameLifetimes()
 {
 	if(!setting_logStuff) return;

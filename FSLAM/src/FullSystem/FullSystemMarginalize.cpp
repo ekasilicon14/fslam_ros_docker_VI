@@ -260,6 +260,7 @@ void FullSystem::marginalizeFrame(FrameHessian* frame)
 		}
 	}
 
+	// indirect!: Marginalize indirect map points
 	if(frame->shell->frame)
 		frame->shell->frame->ReduceToEssential();
 

@@ -79,6 +79,7 @@ namespace HSLAM
 			needRefresh = false;
 		}
 
+		// indirect!: Additional functions needed for loop closure optimization
 		SE3 getPose() {
             boost::lock_guard<boost::mutex> l(shellPoseMutex);
             return camToWorld;

@@ -554,7 +554,6 @@ float FullSystem::optimize(int mnumOptIts)
 		backupState(iteration!=0);
 
 		// Solves the Hessian
-		//solveSystemNew(0);
 		solveSystem(iteration, lambda);
 		// Increment optimization
 		double incDirChange = (1e-20 + previousX.dot(ef->lastX)) / (1e-20 + previousX.norm() * ef->lastX.norm());
@@ -635,6 +634,7 @@ float FullSystem::optimize(int mnumOptIts)
 	Vec10 newStateZero = Vec10::Zero();
 	newStateZero.segment<2>(6) = frameHessians.back()->get_state().segment<2>(6);
 
+	// Set new poses
 	frameHessians.back()->setEvalPT(frameHessians.back()->PRE_worldToCam,
 			newStateZero);
 	EFDeltaValid=false;
@@ -645,6 +645,7 @@ float FullSystem::optimize(int mnumOptIts)
 
 
 
+	// Do a fixed linearization
 	lastEnergy = linearizeAll(true);
 
 
@@ -680,6 +681,7 @@ float FullSystem::optimize(int mnumOptIts)
 
 			fh->shell->aff_g2l = fh->aff_g2l();
 
+			// !indirect: Update map points
 			auto Mps = fh->shell->frame->getMapPointsV();
 			
 			for (auto &it: Mps)
@@ -758,10 +760,12 @@ void FullSystem::removeOutliers()
 			PointHessian* ph = fh->pointHessians[i];
 			if(ph==0) continue;
 
+			// Remove point
 			if(ph->residuals.size() == 0)
 			{
 				fh->pointHessiansOut.push_back(ph);
 				ph->efPoint->stateFlag = EFPointStatus::PS_DROP;
+				// indirect!: Remove map point
 				if(!ph->Mp.expired())
 					ph->Mp.lock()->setDirStatus(MapPoint::removed);
 				fh->pointHessians[i] = fh->pointHessians.back();
