@@ -133,7 +133,7 @@ struct PC_output
 class FullSystem
 {
 public:
-	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+	EIGEN_MAKE_ALIGNED_OPERATOR_NEW;
 	FullSystem();
 	virtual ~FullSystem();
 

@@ -64,6 +64,10 @@ extern float setting_initialTransPrior;
 extern float setting_initialAffBPrior;
 extern float setting_initialAffAPrior;
 extern float setting_initialCalibHessian;
+extern float setting_initialIMUHessian;
+extern float setting_initialScaleHessian;
+extern float setting_initialbaHessian;
+extern float setting_initialbgHessian;
 
 extern int setting_solverMode;
 extern double setting_solverModeDelta;
@@ -198,6 +202,12 @@ extern int staticPattern[10][40][2];
 extern int staticPatternNum[10];
 extern int staticPatternPadding[10];
 
+
+extern bool imu_use_flag;
+extern bool imu_track_flag;
+extern double imu_weight;
+extern double imu_weight_tracker;
+extern double setting_margWeightFac_imu;
 
 
 

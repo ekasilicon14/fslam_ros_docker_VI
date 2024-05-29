@@ -76,9 +76,10 @@ float setting_initialTransPrior = 1e10;
 float setting_initialAffBPrior = 1e14;
 float setting_initialAffAPrior = 1e14;
 float setting_initialCalibHessian = 5e9;
-
-
-
+float setting_initialIMUHessian = 5e7;
+float setting_initialScaleHessian = 5e5;
+float setting_initialbaHessian = 5e5;
+float setting_initialbgHessian = 1;
 
 
 /* some modes for solving the resulting linear system (e.g. orthogonalize wrt. unobservable dimensions) */
@@ -233,6 +234,14 @@ bool setting_fullResetRequested = false;
 bool setting_debugout_runquiet = false;
 
 int sparsityFactor = 5;	// not actually a setting, only some legacy stuff for coarse initializer.
+
+
+// IMU Parameters
+double imu_weight = 0;
+double imu_weight_tracker = 0;
+bool imu_use_flag = false;
+bool imu_track_flag = false;
+double setting_margWeightFac_imu = 1;
 
 
 void handleKey(char k)
