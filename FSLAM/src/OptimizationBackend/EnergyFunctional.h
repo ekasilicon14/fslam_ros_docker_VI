@@ -30,8 +30,7 @@
 #include "vector"
 #include <math.h>
 #include "map"
-#include "FullSystem/IMUPreintegrator.h"
-#include "util/DatasetReader.h"
+
 
 namespace HSLAM
 {
@@ -78,15 +77,14 @@ public:
 	EFPoint* insertPoint(PointHessian* ph);
 
 	void dropResidual(EFResidual* r);
-	void marginalizeFrame(EFFrame* fh, IMUVariables* iv = nullptr);
-	void marginalizeFrame_imu(EFFrame* fh, IMUVariables* iv);
+	void marginalizeFrame(EFFrame* fh);
 	void removePoint(EFPoint* ph);
 
 
 
 	void marginalizePointsF();
 	void dropPointsF();
-	void solveSystemF(int iteration, double lambda, CalibHessian* HCalib, IMUVariables* iv = nullptr);
+	void solveSystemF(int iteration, double lambda, CalibHessian* HCalib);
 	double calcMEnergyF();
 	double calcLEnergyF_MT();
 
@@ -97,28 +95,11 @@ public:
 
 	void setAdjointsF(CalibHessian* Hcalib);
 
-	void setIMUData_Pointer(IMUData* _IMU_Data);
-
 	std::vector<EFFrame*> frames;
 	int nPoints, nFrames, nResiduals;
 
 	MatXX HM;
 	VecX bM;
-	
-	MatXX HM_imu;
-	VecX bM_imu;
-	
-	MatXX HM_bias;
-	VecX bM_bias;
-	
-	MatXX HM_imu_half;
-	VecX bM_imu_half;
-	
-	double s_middle;
-	double s_last;
-	double d_now;
-	double d_half;
-	bool side_last; //for d margin: true: upper s_middle false: below s_middle
 
 	int resInA, resInL, resInM;
 	MatXX lastHS;
@@ -131,6 +112,7 @@ public:
 	std::vector<VecX> lastNullspaces_affB;
 
 	IndexThreadReduce<Vec10>* red;
+
 
 	std::map<uint64_t,
 	  Eigen::Vector2i,
@@ -150,8 +132,6 @@ private:
 	void accumulateSCF_MT(MatXX &H, VecX &b, bool MT);
 
 	void calcLEnergyPt(int min, int max, Vec10* stats, int tid);
-	
-	void getIMUHessian(MatXX &H, VecX &b, IMUVariables* iv);
 
 	void orthogonalize(VecX* b, MatXX* H);
 	Mat18f* adHTdeltaF;
@@ -177,8 +157,6 @@ private:
 	std::vector<EFPoint*> allPointsToMarg;
 
 	float currentLambda;
-
-	IMUData* IMU_Data;
 };
 }
 

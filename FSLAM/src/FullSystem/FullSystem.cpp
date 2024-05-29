@@ -68,7 +68,6 @@
 #include "util/ImageAndExposure.h"
 
 #include "Indirect/IndirectTracker.h"
-#include "util/DatasetReader.h"
 
 #include <cmath>
 
@@ -187,11 +186,8 @@ FullSystem::FullSystem()
 	currentMinActDist=2;
 	initialized=false;
 
-	ef = new EnergyFunctional();
-	if(imu_use_flag){
-		ef->setIMUData_Pointer(IMU_Data);
-	}
 
+	ef = new EnergyFunctional();
 	ef->red = &this->treadReduce;
 
 	isLost=false;
@@ -258,11 +254,6 @@ FullSystem::~FullSystem()
 	delete coarseInitializer;
 	delete pixelSelector;
 	delete ef;
-
-	if(imu_use_flag){
-		delete vi;
-	}
-	
 	loopCloser.reset();
 	matcher.reset();
 	detector.reset();
@@ -1112,6 +1103,7 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
     shell->timestamp = image->timestamp;
     shell->incoming_id = id;
 	fh->shell = shell;
+	allFrameHistory.push_back(shell);
 
 
     // =========================== Place image and image settings into frame =========================
@@ -1121,13 +1113,6 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		fh->makeColourImages(image->r_image, image->g_image, image->b_image);
 	}
 
-	if(allFrameHistory.size()>0){
-	    fh->velocity = fh->shell->velocity = allFrameHistory.back()->velocity;
-	    fh->bias_g = fh->shell->bias_g = allFrameHistory.back()->bias_g + allFrameHistory.back()->delta_bias_g;
-	    fh->bias_a = fh->shell->bias_a = allFrameHistory.back()->bias_a + allFrameHistory.back()->delta_bias_a;
-	}
-	
-	allFrameHistory.push_back(shell);
 
 
 	// =========================== Process Image =========================
@@ -1138,7 +1123,6 @@ void FullSystem::addActiveFrame( ImageAndExposure* image, int id )
 		{
 
 			coarseInitializer->setFirst(&Hcalib, fh);
-			if(imu_use_flag) initFirstFrame_imu(fh);
 		}
 		else if(coarseInitializer->trackFrame(fh, outputWrapper))	// if SNAPPED
 		{
@@ -2680,15 +2664,10 @@ void FullSystem::BAatExit()
 	    it->setRefresh(true);
 }
 
-<<<<<<< HEAD
 void FullSystem::setVocab(DBoW3::Vocabulary* _Vocabpnt)
 {
 	loopCloser->lc_setVocab(_Vocabpnt);
 	globalMap->m_setVocab(_Vocabpnt);
-=======
-void FullSystem::setIMUData(IMUData* _IMU_Data){
-	IMU_Data = _IMU_Data;
->>>>>>> b0878cd (Final integration step 1. CoarseTracker.)
 }
 
 

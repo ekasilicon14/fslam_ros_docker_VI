@@ -50,26 +50,20 @@ int main(int argc, char **argv)
 
 	cxxopts::Options options("HSLAM", "Direct Indirect Feature Fusion SLAM");
 
-	std::string source0 = "";
-	std::string calib0 = "";
-	std::string imu = "";
-	std::string imu_calib = "";
+	std::string source = "";
+	std::string calib = "";
 	std::string vocabPath = "";
 	std::string vignette = "";
 	std::string gammaCalib = "";
 
 	options.add_options()
-        ("f,files", "Input images path - mandatory input", cxxopts::value(source0))
-		("C,calib", "Camera intrinsic callibration - mandatory input", cxxopts::value(calib0))
-		("i,imu", "IMU data path", cxxopts::value(imu))
-		("I,imu_calib", "IMU parameter file", cxxopts::value(imu_calib))
+        ("f,files", "Input images path - mandatory input", cxxopts::value(source))
+		("c,calib", "Camera intrinsic callibration - mandatory input", cxxopts::value(calib))
 		("v,vocab", "Path to Vocabulary file - required for loop closure", cxxopts::value(vocabPath))
 		("n,vignette", "Path to photmetric calibration Vignette model", cxxopts::value(vignette))
 		("g,gamma", "Path to photmetric calibration gamma response Model", cxxopts::value(gammaCalib))
 		("l,loopclosure", "Enable-Disable loop closure", cxxopts::value<bool>()->default_value("false"))
 		("r,reverse", "Play a sequence in reverse", cxxopts::value<bool>()->default_value("false"))
-		("imu_weight", "Weight of IMU", cxxopts::value<float>()->default_value("5"))
-		("imu_weight_tracker", "Weight of IMU tracking relative to visual tracking", cxxopts::value<float>()->default_value("0.5"))
 		("preload", "Preload all images into memory", cxxopts::value<bool>()->default_value("false"))
 		("usesampleoutput", "Replace pangolinViewer with another output wrapper", cxxopts::value<bool>()->default_value("false"))
 		("nolog", "Disable logging optimization data", cxxopts::value<bool>()->default_value("false"))
@@ -112,9 +106,7 @@ int main(int argc, char **argv)
 	int endIndex = result["endindex"].as<int>();
 	int preset = result["preset"].as<int>();
 	int mode = result["mode"].as<int>();
-	float playbackSpeed = result["speed"].as<float>();
-	float imu_weight_ = result["imu_weight"].as<float>();
-	float imu_weight_tracker_ = result["imu_weight_tracker"].as<float>();
+	float playbackSpeed = result["speed"].as<float>(); // 0 for linearize (play as fast as possible, while sequentializing tracking & mapping). otherwise, factor on timestamps.
 
 	bool use_colour = result["colour"].as<bool>();
 	bool use_16bit = result["use16bit"].as<bool>(); 
@@ -177,6 +169,7 @@ int main(int argc, char **argv)
 				"- original image resolution\n", preset==0 ? "no " : "1x");
 
 		playbackSpeed = (preset==0 ? 0 : 1);
+		// preload = preset==1;
 	}
 	else if(preset == 2 || preset == 3)
 	{
@@ -201,6 +194,7 @@ int main(int argc, char **argv)
 
 		setting_logStuff = false;
 	}
+	
 
 	ImageFolderReader* reader = new ImageFolderReader(source, calib, gammaCalib, vignette, use_16bit, use_colour);
 	reader->setGlobalCalibration();
@@ -210,21 +204,6 @@ int main(int argc, char **argv)
 	{
 		printf("ERROR: dont't have photometric calibation. Need to use commandline options mode=1 or mode=2 ");
 		exit(1);
-	}
-
-	IMUData* imu_reader;
-	if(!imu.empty() && !imu_calib.empty()){
-		imu_reader = new IMUData(imu, imu_calib);
-		imu_reader->getIMUfiles_euroc();
-		imu_reader->getIMUinfo_euroc();
-
-		imu_weight = imu_weight_;
-		imu_weight_tracker = imu_weight_tracker_;
-		imu_use_flag = true;
-		imu_track_flag = true;
-	} else {
-		imu_use_flag = false;
-		imu_track_flag = false;
 	}
 
 
@@ -346,10 +325,7 @@ int main(int argc, char **argv)
             }
 
 			
-			if (!skipFrame){
-				fullSystem->addActiveFrame(img, i);
-			}
-
+			if (!skipFrame) fullSystem->addActiveFrame(img, i);
 			
 
 			delete img;

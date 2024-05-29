@@ -47,7 +47,6 @@ namespace HSLAM
 
 		// Constantly adapted
 		
-		SE3 camToWorld;				// Write: TRACKING, while frame is still fresh; MAPPING: only when locked [shellPoseMutex].
 		AffLight aff_g2l;
 		bool poseValid;
 
@@ -56,12 +55,6 @@ namespace HSLAM
 		int statistics_goodResOnThis;
 		int marginalizedAt;
 		double movedByOpt;
-
-		Vec3 velocity;
-		Vec3 bias_g;
-		Vec3 bias_a;
-		Vec3 delta_bias_g;
-		Vec3 delta_bias_a;
 
 		bool isKeyframe;
 		bool needRefresh;
@@ -84,12 +77,6 @@ namespace HSLAM
 			trackingRefId = 0;
 			isKeyframe = false;
 			needRefresh = false;
-
-			velocity = Vec3::Zero();
-			bias_g = Vec3::Zero();
-			bias_a = Vec3::Zero();
-			delta_bias_g = Vec3::Zero();
-			delta_bias_a = Vec3::Zero();
 		}
 
 		// indirect!: Additional functions needed for loop closure optimization
@@ -154,6 +141,7 @@ namespace HSLAM
 
 		private:
 			boost::mutex shellPoseMutex;
+			SE3 camToWorld; // Write: TRACKING, while frame is still fresh; MAPPING: only when locked [shellPoseMutex].
 			Sim3 worldToCamOpti; //camToWorld.inverse
 			Sim3 worldToCamOptiInv;
 

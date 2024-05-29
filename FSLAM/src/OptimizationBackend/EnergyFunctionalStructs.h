@@ -56,14 +56,11 @@ public:
 	inline EFResidual(PointFrameResidual* org, EFPoint* point_, EFFrame* host_, EFFrame* target_) :
 		data(org), point(point_), host(host_), target(target_)
 	{
-		isLinearized = false;
-		isActiveAndIsGoodNEW = false;
-
+		isLinearized=false;
+		isActiveAndIsGoodNEW=false;
 		J = new RawResidualJacobian();
 		assert(((long)this)%16==0);
 		assert(((long)J)%16==0);
-
-		JpJdF = Vec8f::Zero();
 	}
 	inline ~EFResidual()
 	{
@@ -110,8 +107,6 @@ public:
 	{
 		takeData();
 		stateFlag=EFPointStatus::PS_GOOD;
-
-		HdiF = 0;
 	}
 	void takeData();
 
@@ -152,8 +147,6 @@ public:
 	EFFrame(FrameHessian* d) : data(d)
 	{
 		takeData();
-
-		m_flag = false;
 	}
 	void takeData();
 
@@ -169,7 +162,6 @@ public:
 	int idx;	// idx in frames.
 
 	int frameID;
-	bool m_flag;
 };
 
 }

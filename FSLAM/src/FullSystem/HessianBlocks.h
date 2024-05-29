@@ -161,14 +161,6 @@ struct FrameHessian
 	Vec10 step;
 	Vec10 step_backup;
 	Vec10 state_backup;
-	
-	Vec9 step_imu = Vec9::Zero();
-	
-	Vec3 velocity = Vec3::Zero();
-	Vec3 delta_bias_g = Vec3::Zero();
-	Vec3 delta_bias_a = Vec3::Zero();
-	Vec3 bias_g = Vec3::Zero();
-	Vec3 bias_a = Vec3::Zero();
 
 
     EIGEN_STRONG_INLINE const SE3 &get_worldToCam_evalPT() const {return worldToCam_evalPT;}

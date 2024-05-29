@@ -373,7 +373,7 @@ void PangolinDSOViewer::drawConstraints()
 
 	if(settings_showTrajectory->Get())
 	{
-		float colorRed[3] = {1,0.7,0};
+		float colorRed[3] = {1,0,0};
 		glColor3f(colorRed[0],colorRed[1],colorRed[2]);
 		glLineWidth(3);
 
@@ -677,11 +677,6 @@ void PangolinDSOViewer::publishCamPose(FrameShell* frame,
 	if(!setting_render_display3D->Get()) return;
 
 	currentCam->setFromF(frame, HCalib);
-
-	// Using IMU frame
-	// allFramePoses.push_back((SE3(T_WD.matrix()*frame->camToWorld.matrix()*T_WD.inverse().matrix())).translation().cast<float>());
-	
-	// Using camera frame
 	allFramePoses.push_back(currentCam->camToWorld.translation().cast<float>());
 }
 
