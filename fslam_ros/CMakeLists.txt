@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.5)
 project(fslam_ros)
 
+# Set C++ standard
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
 # Find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
@@ -31,7 +39,6 @@ endif()
 
 # Find FSLAM library and headers
 if (FSLAM_PATH)
-    # Manually set path to FSLAM source folder
     message("FSLAM_PATH set, trying to find library.")
     message("---- EXPECTING FSLAM sources at\n\"${FSLAM_PATH}\"")
     set(FSLAM_INCLUDE_DIRS "${FSLAM_PATH}/src" "${FSLAM_PATH}/Thirdparty/Sophus" "${FSLAM_PATH}/Thirdparty/g2o" "${FSLAM_PATH}/Thirdparty/DBow3" "${FSLAM_PATH}/Thirdparty/opencv-4.9.0")
@@ -56,13 +63,6 @@ endif()
 
 message("---- Found FSLAM library at \"${FSLAM_LIBRARY}\"")
 
-# Set additional paths
-set(CMAKE_MODULE_PATH /home/pavanjay/lab/colcon_ws/src/fslam_ros/cmake)
-set(OpenCV_DIR /home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/opencv4)
-set(Pangolin_DIR /home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
-set(DBoW3_DIR /home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/DBoW3)
-set(G2O_DIR "/home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/g2o")
-
 # Include directories
 include_directories(
   ${PROJECT_SOURCE_DIR}/src
@@ -70,40 +70,23 @@ include_directories(
   ${Pangolin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
-  ${rclcpp_INCLUDE_DIRS}
-  ${sensor_msgs_INCLUDE_DIRS}
-  ${geometry_msgs_INCLUDE_DIRS}
-  ${cv_bridge_INCLUDE_DIRS}
-  ${G2O_INCLUDE_DIR}
-  ${DBoW3_INCLUDE_DIRS}
-  ${CSPARSE_INCLUDE_DIR}
-  ${CHOLMOD_INCLUDE_DIR}
-)
-
-# Link directories
-link_directories(
-  ${G2O_INCLUDE_DIR}
-  ${DBoW3_INCLUDE_DIR}
-  ${CSPARSE_INCLUDE_DIR}
-  ${CHOLMOD_INCLUDE_DIR}
 )
 
 # Declare a C++ executable
 add_executable(fslam_live src/main.cpp)
 
 # Link libraries
+ament_target_dependencies(fslam_live
+    rclcpp
+    sensor_msgs
+    geometry_msgs
+    cv_bridge
+)
+
 target_link_libraries(fslam_live
     ${FSLAM_LIBRARY}
     ${Pangolin_LIBRARIES}
     ${OpenCV_LIBS}
-    ${G2O_LIBS}
-    ${DBoW3_LIB_DIR}/libDBoW3.so
-    ${rclcpp_LIBRARIES}
-    ${sensor_msgs_LIBRARIES}
-    ${geometry_msgs_LIBRARIES}
-    ${cv_bridge_LIBRARIES}
-    ${CSPARSE_LIBRARY}
-    ${CHOLMOD_LIBRARIES}
     ${Boost_LIBRARIES}
 )
 

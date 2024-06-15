@@ -1,30 +1,28 @@
 <?xml version="1.0"?>
-<package>
+<package format="2">
   <name>fslam_ros</name>
   <version>1.0.0</version>
-  <description>
+  <description>ROS Wrapper FSLAM.</description>
 
-    ROS Wrapper FSLAM.
-
-  </description>
-
-  <author>Jakob Engel</author>
+  <author email="engelj-@in-dot-tum-dot-de">Jakob Engel</author>
+  <maintainer email="engelj-@in-dot-tum-dot-de">Jakob Engel</maintainer>
   <license>see http://vision.in.tum.de/dso</license>
-  <maintainer email="engelj-@in-dot-tum-dot.de">
-    Jakob Engel
-  </maintainer>
-  <!-- <review status="unreviewed" notes=""/> -->
-  <url>http://vision.in.tum.de/dso</url>
+  <url type="website">http://vision.in.tum.de/dso</url>
 
-  <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>geometry_msgs</build_depend>
-  <build_depend>roscpp</build_depend>
-  <build_depend>sensor_msgs</build_depend>
-  <build_depend>cv_bridge</build_depend>
+  <buildtool_depend>ament_cmake</buildtool_depend>
 
-  <run_depend>geometry_msgs</run_depend>
-  <run_depend>roscpp</run_depend>
-  <run_depend>sensor_msgs</run_depend>
-  <run_depend>cv_bridge</run_depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>OpenCV</depend>
+  <depend>DBoW3</depend>
+  <depend>SuiteParse</depend>
+  <depend>Pangolin</depend>
+  <depend>Eigen3</depend>
+  <depend>Boost</depend>
 
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>
