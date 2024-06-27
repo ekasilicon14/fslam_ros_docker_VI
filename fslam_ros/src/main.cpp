@@ -10,24 +10,20 @@ Based on and inspired by DSO project by Jakob Engel
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
-
-
-
+#include <memory>
 #include "IOWrapper/Output3DWrapper.h"
 
-#include <boost/thread.hpp>
 #include "util/settings.h"
 #include "FullSystem/FullSystem.h"
 #include "util/Undistort.h"
 #include "IOWrapper/Pangolin/PangolinDSOViewer.h"
 #include "IOWrapper/OutputWrapper/SampleOutputWrapper.h"
 
-
-#include <ros/ros.h>
-#include <sensor_msgs/image_encodings.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/CameraInfo.h>
-#include <geometry_msgs/PoseStamped.h>
+#include <rclcpp/rclcpp.hpp>
+#include <sensor_msgs/image_encodings.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/camera_info.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include "cv_bridge/cv_bridge.h"
 
 using namespace HSLAM;
@@ -217,12 +213,12 @@ void parseArgument(char* arg)
 
 
 
-FullSystem* fullSystem = 0;
-Undistort* undistorter = 0;
-DBoW3::Vocabulary* Vocabpnt;
+std::unique_ptr<FullSystem> fullSystem = nullptr;
+std::unique_ptr<Undistort> undistorter = nullptr;
+std::unique_ptr<DBoW3::Vocabulary> Vocabpnt = nullptr;
 int frameID = 0;
 
-void vidCb(const sensor_msgs::ImageConstPtr img)
+void vidCb(const sensor_msgs::msg::Image::ConstSharedPtr img)
 {
 	cv_bridge::CvImagePtr cv_ptr;
 	if(!useColour){
@@ -239,17 +235,17 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 	if(setting_fullResetRequested)
 	{
 		std::vector<IOWrap::Output3DWrapper*> wraps = fullSystem->outputWrapper;
-		delete fullSystem;
-		for(IOWrap::Output3DWrapper* ow : wraps) ow->reset();
-		fullSystem = new FullSystem();
+        fullSystem.reset(new FullSystem());
+        for (IOWrap::Output3DWrapper* ow : wraps)
+            ow->reset();
 		fullSystem->linearizeOperation=false;
 		fullSystem->outputWrapper = wraps;
 		if(LoopClosure)
 		{
-			fullSystem->setVocab(Vocabpnt);
+            fullSystem->setVocab(Vocabpnt.get());
 			printf("Vocabulary Set\n");
 		}
-	    if(undistorter->photometricUndist != 0)
+        if (undistorter->photometricUndist != nullptr)
 	    	fullSystem->setGammaFunction(undistorter->photometricUndist->getG());
 		setting_fullResetRequested=false;
 	}
@@ -272,7 +268,7 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 		memcpy(rimg->data, channels[0].data, channels[0].rows*channels[0].cols);
 
 		cv::Mat grey_m;
-		cv::cvtColor(cv_ptr->image, grey_m, CV_BGR2GRAY);
+        cv::cvtColor(cv_ptr->image, grey_m, cv::COLOR_BGR2GRAY);
 
 		MinimalImageB* img = new MinimalImageB(grey_m.cols, grey_m.rows);
 		memcpy(img->data, grey_m.data, grey_m.rows*grey_m.cols);
@@ -283,48 +279,34 @@ void vidCb(const sensor_msgs::ImageConstPtr img)
 		delete rimg; delete gimg; delete bimg; delete img;
 	}
 
-	undistImg->timestamp=img->header.stamp.toSec(); // relay the timestamp to FSLAM
+    undistImg->timestamp = img->header.stamp.sec + img->header.stamp.nanosec * 1e-9; // (UNSURE pavan) relay the timestamp to FSLAM
 	fullSystem->addActiveFrame(undistImg, frameID);
 	frameID++;
 	delete undistImg;
 
 }
 
-
-//NA: Adding interruption code
 bool interrupted = false;
 void interruptHandler(int signal)
 {
 	    interrupted = true;
 }
 
-
-
-//boost exit handler to exit all threads
-void my_exit_handler(int s)
-{
-	printf("Caught signal %d\n",s);
-	exit(1);
-}
-
 void exitThread()
 {
-	struct sigaction sigIntHandler;
-	sigIntHandler.sa_handler = my_exit_handler;
-	sigemptyset(&sigIntHandler.sa_mask);
-	sigIntHandler.sa_flags = 0;
-	sigaction(SIGINT, &sigIntHandler, NULL);
-	while(true) pause();
+    std::signal(SIGINT, interruptHandler);
+    while (!interrupted)
+        std::this_thread::sleep_for(std::chrono::seconds(1));
 }
 
 
 int main( int argc, char** argv )
 {		
-	boost::thread exThread = boost::thread(exitThread); // hook crtl+C.
-	ros::init(argc, argv, "fslam_live");
+    rclcpp::init(argc, argv);
+    auto node = rclcpp::Node::make_shared("fslam_live");
 
-	for(int i=1; i<argc;i++) parseArgument(argv[i]);
-
+    for (int i = 1; i < argc; i++)
+        parseArgument(argv[i]);
 
 	setting_desiredImmatureDensity = 1000;
 	setting_desiredPointDensity = 1200;
@@ -343,14 +325,14 @@ int main( int argc, char** argv )
 
 	if(!vocabPath.empty())
 	{
-		Vocabpnt = new DBoW3::Vocabulary();
+        Vocabpnt = std::make_unique<DBoW3::Vocabulary>();
 		Vocabpnt->load(vocabPath.c_str());
 		LoopClosure = true; 
 		printf("loaded Vocabulary from %s!\n", vocabPath.c_str());
 		if (Vocabpnt->empty())
 		{
 			printf("failed to load vocabulary! Exit\n");
-			exit(1);
+            return 1;
 		}
 	}else{
 		LoopClosure = false; 
@@ -364,16 +346,16 @@ int main( int argc, char** argv )
             undistorter->getK().cast<float>());
 
 
-    fullSystem = new FullSystem();
+    fullSystem = std::make_unique<FullSystem>();
     fullSystem->linearizeOperation=false;
 	
 	if(LoopClosure)
 	{
-		fullSystem->setVocab(Vocabpnt);
+        fullSystem->setVocab(Vocabpnt.get());
 		printf("Vocabulary Set\n");
 	}
 	
-	IOWrap::PangolinDSOViewer* viewer = 0;
+    IOWrap::PangolinDSOViewer* viewer = nullptr;
 	if(!disableAllDisplay)
     {
         viewer = new IOWrap::PangolinDSOViewer(
@@ -386,88 +368,69 @@ int main( int argc, char** argv )
         fullSystem->outputWrapper.push_back(new IOWrap::SampleOutputWrapper());
 
 
-    if(undistorter->photometricUndist != 0)
+    if (undistorter->photometricUndist != nullptr)
     	fullSystem->setGammaFunction(undistorter->photometricUndist->getG());
 
-    ros::NodeHandle nh;
-	//ros::Rate loop_rate(10);
-    ros::Subscriber imgSub = nh.subscribe("image", 1, &vidCb);
+	auto imgSub = node->create_subscription<sensor_msgs::msg::Image>(
+		"image", 1, vidCb);
 
-    //NA: replacing ros_spin with interruptable sequence
-    //ros::spin();
-	
-    signal(SIGINT, interruptHandler);
+    std::thread exThread(exitThread); // hook ctrl+C.
 
-	while (ros::ok() && !interrupted) //&& frameID <999999 NA
-		{	
-			//printf("ROS IS OKAY!");
-			//printf("FrameID: %d ",frameID);
-			ros::spinOnce();
-			//loop_rate.sleep();
-			if(viewer!=0 && viewer->isDead)
-					break;
-			
-			if(fullSystem->isLost)
-            {
-                printf("LOST!!\n");
-                break;
-            }
-			
-			
-	if(fullSystem->initFailed || setting_fullResetRequested)
-            {
-                printf("RESETTING!\n");
-				std::vector<IOWrap::Output3DWrapper*> wraps = fullSystem->outputWrapper;
-				for(IOWrap::Output3DWrapper* ow : wraps) ow->reset();
-				usleep(20000); //hack - wait for display wrapper to clean up.
-				if(fullSystem)
-				{
-					delete fullSystem;
-					fullSystem = nullptr;
-				}
-					
-				fullSystem = new FullSystem();
-    			fullSystem->setGammaFunction(undistorter->photometricUndist->getG());
-				fullSystem->linearizeOperation = false;
-
-				fullSystem->outputWrapper = wraps;
-
-				setting_fullResetRequested=false;
-            }
-			
-			
+    while (rclcpp::ok() && !interrupted)
+	{	
+		//printf("ROS IS OKAY!");
+		//printf("FrameID: %d ",frameID);
+		rclcpp::spin_some(node);
+		//loop_rate.sleep();
+		if (viewer != nullptr && viewer->isDead)
+				break;
+		
+		if(fullSystem->isLost)
+		{
+			printf("LOST!!\n");
+			break;
 		}
+			
+			
+        if (fullSystem->initFailed || setting_fullResetRequested)
+		{
+			printf("RESETTING!\n");
+			std::vector<IOWrap::Output3DWrapper*> wraps = fullSystem->outputWrapper;
+			for (IOWrap::Output3DWrapper* ow : wraps)
+				ow->reset();
+			std::this_thread::sleep_for(std::chrono::milliseconds(20)); // hack - wait for display wrapper to clean up.
+			fullSystem.reset(new FullSystem());
+			fullSystem->setGammaFunction(undistorter->photometricUndist->getG());
+			fullSystem->linearizeOperation = false;
+
+			fullSystem->outputWrapper = wraps;
+
+			setting_fullResetRequested=false;
+		}
+			
+			
+	}
 	fullSystem->blockUntilMappingIsFinished();
 
-	printf("fslam_ros main cpp has been interuppted.\n"); //debug NA
-	ros::shutdown();
-	ros::waitForShutdown();
+    printf("fslam_ros main cpp has been interrupted.\n");
+    rclcpp::shutdown();
 	fullSystem->BAatExit();
 			
 	
 	fullSystem->printResult("result.txt"); 
-	if (outputPC) fullSystem->printPC("PC.PCD");
+    if (outputPC)
+        fullSystem->printPC("PC.PCD");
 
-	//if(viewer != 0)
-	//    viewer->run();
-	//Clean-up and exit
-    for(IOWrap::Output3DWrapper* ow : fullSystem->outputWrapper)
+    for (IOWrap::Output3DWrapper* ow : fullSystem->outputWrapper)
     {
-		//printf("DELETE VIEWER IO wrapper\n");
         ow->join();
         delete ow;
-    }
-
-	if(LoopClosure)
-	{
-		delete Vocabpnt;
 	}
 
 	printf("DELETE FULLSYSTEM!\n");
-	delete fullSystem;
+    fullSystem.reset();
 	printf("DELETE Undistorter\n");
-	delete undistorter;
+    undistorter.reset();
 	printf("EXIT NOW\n");
 	return 0;
 }
-
