@@ -27,8 +27,8 @@ find_package(Eigen3 REQUIRED)
 find_package(Boost COMPONENTS system thread REQUIRED)
 
 # Set paths
-set(FSLAM_PATH /home/pavanjay/lab/colcon_ws/src/FSLAM)
-set(FSLAM_LIBRARY_PATH /home/pavanjay/lab/colcon_ws/src/FSLAM/build/lib)
+set(FSLAM_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM)
+set(FSLAM_LIBRARY_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/build/lib)
 
 # Set values from environment variables if not already set
 if (NOT FSLAM_PATH)
@@ -69,11 +69,11 @@ endif()
 message("---- Found FSLAM library at \"${FSLAM_LIBRARY}\"")
 
 # Set additional paths
-set(CMAKE_MODULE_PATH /home/pavanjay/lab/colcon_ws/src/fslam_ros/cmake)
-set(OpenCV_DIR /home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/opencv4)
-set(Pangolin_DIR /home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
-set(DBoW3_DIR /home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/DBoW3)
-set(G2O_DIR "/home/pavanjay/lab/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/g2o")
+set(CMAKE_MODULE_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/fslam_ros/cmake)
+set(OpenCV_DIR ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/opencv4)
+set(Pangolin_DIR ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
+set(DBoW3_DIR ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/DBoW3)
+set(G2O_DIR ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/g2o)
 
 # Include directories
 include_directories(

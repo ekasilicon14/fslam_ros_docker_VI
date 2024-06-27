@@ -1,5 +1,6 @@
 # Find the header files
-Set(PROJECT_SOURCE_DIR /home/pavanjay/lab/colcon_ws/src/FSLAM)
+set (HARDCODED_PROJECT_DIR /home/pavanjay/lab) # hardcoded path should be replaced and patched (pavan)
+Set(PROJECT_SOURCE_DIR ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM)
 Set(G2O_INCLUDE_DIR  ${PROJECT_SOURCE_DIR}/Thirdparty/CompiledLibs/include/g2o)
 
 # Macro to unify finding both the debug and release versions of the
