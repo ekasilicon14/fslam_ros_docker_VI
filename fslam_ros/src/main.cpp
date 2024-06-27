@@ -338,7 +338,7 @@ int main( int argc, char** argv )
 		LoopClosure = false; 
 	}
 
-    undistorter = Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile);
+	undistorter = std::unique_ptr<HSLAM::Undistort>(Undistort::getUndistorterForFile(calib, gammaFile, vignetteFile));
 
     setGlobalCalib(
             (int)undistorter->getSize()[0],
