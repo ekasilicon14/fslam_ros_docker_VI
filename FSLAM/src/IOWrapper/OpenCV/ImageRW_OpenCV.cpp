@@ -71,7 +71,7 @@ MinimalImageB3* readImageRGB_8U(std::string filename)
 
 MinimalImageB* readImageRGB_8U_split(std::string filename, MinimalImageB*& r, MinimalImageB*& g, MinimalImageB*& b)
 {
-	cv::Mat m = cv::imread(filename, CV_LOAD_IMAGE_COLOR);
+	cv::Mat m = cv::imread(filename, cv::IMREAD_COLOR);
 	if(m.rows*m.cols==0)
 	{
 		printf("cv::imread could not read image %s! this may segfault. \n", filename.c_str());
@@ -84,7 +84,7 @@ MinimalImageB* readImageRGB_8U_split(std::string filename, MinimalImageB*& r, Mi
 	}
 
 	cv::Mat grey_m;
-	cv::cvtColor(m, grey_m, CV_BGR2GRAY);
+	cv::cvtColor(m, grey_m, cv::COLOR_BGR2GRAY);
 
 	cv::Mat channels[3];
     cv::split(m, channels);
