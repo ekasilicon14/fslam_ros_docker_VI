@@ -1,7 +1,7 @@
 #!/bin/bash 
 # nyk 22/05/2023
 # Run this script once as it will clean up after itself. Everytime you run it will recompile packages (except opencv)
-BuildType="RelWithDebInfo"
+BuildType="RelWithDebInfo" 
 
 SCRIPTPATH=$(dirname $0)
 if [ $SCRIPTPATH = '.' ]
@@ -12,11 +12,13 @@ fi
 mkdir -p $SCRIPTPATH/CompiledLibs
 InstallDir=$SCRIPTPATH/CompiledLibs
 
+# Source ROS2 Humble setup script
+source /opt/ros/humble/setup.bash
 
 #install system wide dependencies
 #================================
 export DEBIAN_FRONTEND=noninteractive
-#sudo apt -y install libgl1-mesa-dev libglew-dev libsuitesparse-dev libeigen3-dev libboost-all-dev cmake build-essential git libzip-dev ccache freeglut3-dev libgoogle-glog-dev libatlas-base-dev ninja-build
+sudo apt -y install libgl1-mesa-dev libglew-dev libsuitesparse-dev libeigen3-dev libboost-all-dev cmake build-essential git libzip-dev ccache freeglut3-dev libgoogle-glog-dev libatlas-base-dev ninja-build
 
 #install libceres for compatibility with ubuntu 22:
 #cd $SCRIPTPATH/Thirdparty/
@@ -26,11 +28,11 @@ cd ceres-solver-1.14.0 && mkdir build && cd build
 cmake .. -DCMAKE_INSTALL_PREFIX=$InstallDir -DBUILD_EXAMPLES=OFF -DBUILD_TESTING=OFF -DCXX11=ON && make -j $(nproc) && make install && cd .. && rm -r build && cd .. && rm ceres-solver-1.14.0.tar.gz && rm -r ceres-solver-1.14.0
 
 #optional libs to record pangolin gui
-#sudo apt -y install ffmpeg libavcodec-dev libavutil-dev libavformat-dev libswscale-dev libavdevice-dev
+sudo apt -y install ffmpeg libavcodec-dev libavutil-dev libavformat-dev libswscale-dev libavdevice-dev
 
 #if you have OpenCV3.4 comment out the following and specify the directory later
 #sudo apt -y install libjpeg8-dev libpng-dev libtiff5-dev libtiff-dev libavcodec-dev libavformat-dev libv4l-dev libgtk2.0-dev qtbase5-dev qtchooser qt5-qmake qtbase5-dev-tools v4l-utils
-cvVersion=3.4.6
+cvVersion=4.9.0
 #if [ ! -d "$SCRIPTPATH/Thirdparty/opencv-${cvVersion}" ]; then
 #  DL_opencv="https://github.com/opencv/opencv/archive/${cvVersion}.zip"
 #  DL_contrib="https://github.com/opencv/opencv_contrib/archive/${cvVersion}.zip"

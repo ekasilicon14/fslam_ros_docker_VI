@@ -1,20 +1,36 @@
-cmake_minimum_required(VERSION 2.4.6)
+cmake_minimum_required(VERSION 3.5)
 project(fslam_ros)
+set(HARDCODED_PROJECT_DIR /home/pavanjay/lab) # Hardcoded path to the project directory (replace later: pavan)
 
-find_package(catkin REQUIRED COMPONENTS
-  geometry_msgs
-  roscpp
-  sensor_msgs
-  cv_bridge
-)
+# Set C++ standard
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 14)
+endif()
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
-#SET PATH TO FSLAM
+set(CMAKE_MODULE_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/fslam_ros/cmake)
+set(CMAKE_PREFIX_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
 
-set(FSLAM_PATH /catkin_ws/src/FSLAM)
-#set(FSLAM_LIBRARY_PATH ~/catkin_ws/src/FSLAM/lib)
-set(FSLAM_LIBRARY_PATH /catkin_ws/src/FSLAM/build/lib)
+# Find dependencies
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV 4.9.0 REQUIRED PATHS ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/opencv4)
+find_package(Pangolin 0.2 REQUIRED PATHS ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
+find_package(DBoW3 REQUIRED)
+find_package(SuiteParse REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(Boost COMPONENTS system thread REQUIRED)
 
-# set values from environment variables
+# Set paths
+set(FSLAM_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM)
+set(FSLAM_LIBRARY_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/build/lib)
+
+# Set values from environment variables if not already set
 if (NOT FSLAM_PATH)
     set(FSLAM_PATH $ENV{FSLAM_PATH})
 endif()
@@ -25,15 +41,15 @@ if (NOT FSLAM_LIBRARY_PATH)
     endif()
 endif()
 
+# Find FSLAM library and headers
 if (FSLAM_PATH)
     # Manually set path to FSLAM source folder
     message("FSLAM_PATH set, trying to find library.")
     message("---- EXPECTING FSLAM sources at\n\"${FSLAM_PATH}\"")
-    set(FSLAM_INCLUDE_DIRS "${FSLAM_PATH}/src" "${FSLAM_PATH}/Thirdparty/Sophus" "${FSLAM_PATH}/Thirdparty/g2o" "${FSLAM_PATH}/Thirdparty/DBow3" "${FSLAM_PATH}/Thirdparty/opencv-3.4.6")
+    set(FSLAM_INCLUDE_DIRS "${FSLAM_PATH}/src" "${FSLAM_PATH}/Thirdparty/Sophus" "${FSLAM_PATH}/Thirdparty/g2o" "${FSLAM_PATH}/Thirdparty/DBow3" "${FSLAM_PATH}/Thirdparty/opencv-4.9.0")
     message("---- LOOKING FOR FSLAM library at\n\"${FSLAM_LIBRARY_PATH}\"")
     find_library(FSLAM_LIBRARY HSLAM_lib ${FSLAM_LIBRARY_PATH})
 else()
-    # Detect FSLAM install (also catkin devel folder)
     message("FSLAM_PATH not set yet, trying to find installed fslam headers and library.")
     find_path(FSLAM_INCLUDE_DIRS FSLAM)
     if (FSLAM_INCLUDE_DIRS)
@@ -42,7 +58,6 @@ else()
     endif()
     find_library(FSLAM_LIBRARY fslam)
 endif()
-
 
 if (NOT FSLAM_INCLUDE_DIRS)
     message(FATAL_ERROR "FSLAM headers not found and/or FSLAM_PATH not set.")
@@ -53,105 +68,36 @@ endif()
 
 message("---- Found FSLAM library at \"${FSLAM_LIBRARY}\"")
 
-
-set(CMAKE_MODULE_PATH /catkin_ws/src/fslam_ros/cmake)
-set(OpenCV_DIR /catkin_ws/src/FSLAM/Thirdparty/CompiledLibs/share/OpenCV)
-set(Pangolin_DIR /catkin_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
-set(DBoW3_DIR /catkin_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/DBoW3)
-set(G2O_DIR "/catkin_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/g2o")
-
-
-find_package(Pangolin 0.2 REQUIRED PATHS /catkin_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
-message("\n\n---- FOUND Pangolin Headers at\n\"${Pangolin_INCLUDE_DIRS}\"")
-message("---- FOUND Pangolin Libs at\n\"${Pangolin_LIBRARIES}\"")
-
-find_package(OpenCV 3.4.6 REQUIRED PATHS /catkin_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
-message("\n\n---- FOUND OpenCV Headers at\n\"${OpenCV_INCLUDE_DIRS}\"")
-message("---- FOUND OpenCV Libs at\n\"${OpenCV_LIBS}\"")
-
-find_package(DBoW3 REQUIRED)
-message("\n\n---- FOUND DBoW3 Headers at\n\"${DBoW3_INCLUDE_DIRS}\"")
-message("---- FOUND DBoW3 Libs at\n\"${DBoW3_LIBRARIES}\"")
-
-find_package(SuiteParse REQUIRED)
-message("\n\n---- FOUND CSPARSE at\n\"${CSPARSE_INCLUDE_DIR}\"")
-message("\n\n---- FOUND CSPARSE LIBS at\n\"${CSPARSE_LIBRARY}\"")
-message("\n\n---- FOUND CHOLMOD at\n\"${CHOLMOD_INCLUDE_DIR}\"")
-message("\n\n---- FOUND CHOLMOD LIBS at\n\"${CHOLMOD_LIBRARIES}\"")
-
-find_package(Eigen3 REQUIRED)
-find_package(Boost COMPONENTS system thread)
-
-#G2O not found troubleshooting
-find_package(G2O COMPONENTS)
-#message("-----G2O troubleshooting-----")
-#message("The G2O directory is : ${G2O_DIR}" )
-#message("The G2O include  directory is : ${G2O_INCLUDE_DIR}" )
-#message("The G2O libraries is : ${G2O_LIBS}" )
-#find_package(G2O REQUIRED COMPONENTS PATHS /catkin_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/g2o)
-message ("The following were consodered for g2o: ${G2O_CONSIDERED_CONFIGS}")
-message("\n\n---- FOUND G2O Headers at\n\"${G2O_INCLUDE_DIR}\"")
-message("---- FOUND G2O Libs at\n\"${G2O_LIBS}\"")
-
-catkin_package(
-  CATKIN_DEPENDS
-    geometry_msgs
-    roscpp
-    sensor_msgs
-    cv_bridge
-)
-
-
-set(LIBS
-  ${OpenCV_LIBS}
-  ${EIGEN3_LIBS}
-  ${G2O_LIBS}
-  ${Pangolin_LIBRARIES}
-  ${DBoW3_LIB_DIR}/libDBoW3.so
-  ${BOOST_THREAD_LIBRARY}
-  boost_system
-  cxsparse
-  cholmod
-)
-###########
-## Build ##
-###########
-
-set(CMAKE_CXX_FLAGS "-std=c++14 -march=native"
-#   "${SSE_FLAGS} -O2 -g -std=c++0x -march=native -fno-omit-frame-pointer"
-)
-
+# Include directories
 include_directories(
   ${PROJECT_SOURCE_DIR}/src
   ${FSLAM_INCLUDE_DIRS}
   ${Pangolin_INCLUDE_DIRS}
   ${OpenCV_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIR}
-  ${catkin_INCLUDE_DIRS}
-  ${G2O_INCLUDE_DIR}
-  ${DBoW3_INCLUDE_DIRS}
-  ${CSPARSE_INCLUDE_DIR}
-  ${CHOLMOD_INCLUDE_DIR}
-  
 )
 
-link_directories(
-  ${G2O_INCLUDE_DIR}
-  ${DBoW3_INCLUDE_DIR}
-  ${CSPARSE_INCLUDE_DIR}
-  ${CHOLMOD_INCLUDE_DIR}
-)
-## Declare a C++ executable
+# Declare a C++ executable
 add_executable(fslam_live src/main.cpp)
+
+# Link libraries
+ament_target_dependencies(fslam_live
+    rclcpp
+    sensor_msgs
+    geometry_msgs
+    cv_bridge
+)
 
 target_link_libraries(fslam_live
     ${FSLAM_LIBRARY}
     ${Pangolin_LIBRARIES}
     ${OpenCV_LIBS}
-    ${G2O_LIBS}
-    ${DBoW3_LIB_DIR}/libDBoW3.so
-    ${catkin_LIBRARIES}
-    ${CSPARSE_LIBRARY}
-    ${CHOLMOD_LIBRARIES}
-    
-   )
+    ${Boost_LIBRARIES}
+)
+
+# Install
+install(TARGETS fslam_live
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+ament_package()
