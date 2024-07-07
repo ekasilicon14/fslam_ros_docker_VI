@@ -372,7 +372,7 @@ int main( int argc, char** argv )
     	fullSystem->setGammaFunction(undistorter->photometricUndist->getG());
 
 	auto imgSub = node->create_subscription<sensor_msgs::msg::Image>(
-		"image", 1, vidCb);
+		"image_raw", 1, vidCb);
 
     std::thread exThread(exitThread); // hook ctrl+C.
 
