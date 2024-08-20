@@ -24,6 +24,7 @@ Based on and inspired by DSO project by Jakob Engel
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/compressed_image.hpp>
+#include <std_srvs/srv/trigger.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include "cv_bridge/cv_bridge.h"
@@ -337,6 +338,50 @@ int main( int argc, char** argv )
 	setting_logStuff = false;
 	setting_kfGlobalWeight = 1.3;
 
+    auto check_camera_topics = [&node]() {
+        auto topic_names_and_types = node->get_topic_names_and_types();
+        for (const auto& topic : topic_names_and_types) {
+            if (topic.first.find("oak/rgb/preview/image_raw") != std::string::npos) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    // Add a function to start the camera
+    auto start_camera = [&node]() {
+        auto client = node->create_client<std_srvs::srv::Trigger>("/oakd/start_camera");
+        while (!client->wait_for_service(std::chrono::seconds(1))) {
+            if (!rclcpp::ok()) {
+                RCLCPP_ERROR(node->get_logger(), "Interrupted while waiting for the service. Exiting.");
+                return false;
+            }
+            RCLCPP_INFO(node->get_logger(), "Service not available, waiting again...");
+        }
+
+        auto request = std::make_shared<std_srvs::srv::Trigger::Request>();
+        auto result = client->async_send_request(request);
+
+        if (rclcpp::spin_until_future_complete(node, result) ==
+            rclcpp::FutureReturnCode::SUCCESS)
+        {
+            RCLCPP_INFO(node->get_logger(), "Camera started successfully");
+			std::this_thread::sleep_for(std::chrono::seconds(2));
+            return true;
+        } else {
+            RCLCPP_ERROR(node->get_logger(), "Failed to start camera");
+            return false;
+        }
+    };
+
+    // Check if camera topics are active, if not, start the camera
+    if (!check_camera_topics()) {
+        RCLCPP_INFO(node->get_logger(), "Camera topics not found. Attempting to start camera...");
+        if (!start_camera()) {
+            RCLCPP_ERROR(node->get_logger(), "Failed to start camera. Exiting.");
+            return 1;
+        }
+    }
 
 	printf("MODE WITH CALIBRATION, but without exposure times!\n");
 	setting_photometricCalibration = 2;

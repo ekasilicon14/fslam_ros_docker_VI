@@ -39,6 +39,7 @@ set(CMAKE_PREFIX_PATH
 # Find dependencies
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV 4.9.0 REQUIRED PATHS ${THIRD_PARTY_PATH}/lib/cmake/opencv4)
@@ -118,6 +119,7 @@ target_link_libraries(fslam_live
 ament_target_dependencies(fslam_live
     rclcpp
     sensor_msgs
+    std_srvs
     geometry_msgs
     cv_bridge
 )
