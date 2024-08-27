@@ -3,7 +3,7 @@ SET(PROJECT_NAME HSLAM)
 PROJECT(${PROJECT_NAME})
 CMAKE_MINIMUM_REQUIRED(VERSION 2.6)
 #set(CMAKE_VERBOSE_MAKEFILE ON)
-set(HARDCODED_PROJECT_DIR /home/pavanjay/lab) # Hardcoded path (replace with your path) [pavan]
+set(HARDCODED_COLCON_DIR ~/colcon_ws) # Hardcoded path (replace with your path) [pavan]
 
 #set(BUILD_TYPE Release)
 set(BUILD_TYPE RelWithDebInfo)
@@ -12,7 +12,7 @@ set(EXECUTABLE_OUTPUT_PATH bin)
 set(LIBRARY_OUTPUT_PATH lib)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(OpenCV_DIR /colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/opencv4)
@@ -26,7 +26,7 @@ find_package(SuiteParse REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(Boost COMPONENTS system thread) 
 #find_package(OpenCV 4.9.0 REQUIRED)
-find_package(OpenCV 4.9.0 REQUIRED PATHS ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs NO_DEFAULT_PATH)
+find_package(OpenCV 4.9.0 REQUIRED PATHS ${HARDCODED_COLCON_DIR}/src/FSLAM/Thirdparty/CompiledLibs NO_DEFAULT_PATH)
 find_package(G2O REQUIRED)
 find_package(DBoW3 REQUIRED) #PATHS ~/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs)
 
@@ -44,8 +44,8 @@ add_definitions("-DThreadCount=${NUMTHREADS}")
 
 set(CMAKE_GENERATOR "Unix Makefiles")
 set(CMAKE_CXX_FLAGS
-   "${SSE_FLAGS} -O3 -g -std=c++0x -march=native -Wno-deprecated -Wno-deprecated-declarations" #-fopenmp is added if g2o is compiled with openmp capabilities
-#   "${SSE_FLAGS} -O3 -g -std=c++0x -fno-omit-frame-pointer"
+   "${SSE_FLAGS} -O3 -g -std=c++17 -march=native -Wno-deprecated -Wno-deprecated-declarations" #-fopenmp is added if g2o is compiled with openmp capabilities
+#   "${SSE_FLAGS} -O3 -g -std=c++17 -fno-omit-frame-pointer"
 )
 #SET CXX FLAGS to use march antive and gcc
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native -std=gnu++0x")

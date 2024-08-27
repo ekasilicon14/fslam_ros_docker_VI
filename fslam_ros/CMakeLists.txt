@@ -1,62 +1,72 @@
 cmake_minimum_required(VERSION 3.5)
 project(fslam_ros)
-set(HARDCODED_PROJECT_DIR /home/pavanjay/lab) # Hardcoded path to the project directory (replace later: pavan)
 
-# Set C++ standard
-if(NOT CMAKE_CXX_STANDARD)
-  set(CMAKE_CXX_STANDARD 14)
-endif()
+# Find and import ament_cmake first
+find_package(ament_cmake REQUIRED)
+# Now we can use ament_cmake functions
+ament_package_xml()
+
+# Set C++ standard to 17
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
-set(CMAKE_MODULE_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/fslam_ros/cmake)
-set(CMAKE_PREFIX_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
+set(CMAKE_CXX_FLAGS
+   "${SSE_FLAGS} -O3 -g -std=c++17 -march=native -Wno-deprecated -Wno-deprecated-declarations"
+)
+add_definitions("-DENABLE_SSE")
+
+# Set paths
+set(HARDCODED_COLCON_DIR ~/colcon_ws) # Hardcoded path (replace with your path containing ) [pavan]
+set(FSLAM_PATH ${HARDCODED_COLCON_DIR}/src/FSLAM)
+set(FSLAM_LIBRARY_PATH ${HARDCODED_COLCON_DIR}/src/FSLAM/build/lib)
+set(THIRD_PARTY_PATH ${FSLAM_PATH}/Thirdparty/CompiledLibs)
+
+# Set CMAKE_MODULE_PATH to include the directory with custom Find modules
+set(CMAKE_MODULE_PATH 
+    ${CMAKE_MODULE_PATH} 
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake
+)
+
+set(CMAKE_PREFIX_PATH 
+    ${CMAKE_PREFIX_PATH}
+    ${THIRD_PARTY_PATH}/lib/cmake
+)
 
 # Find dependencies
-find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
-find_package(OpenCV 4.9.0 REQUIRED PATHS ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake/opencv4)
-find_package(Pangolin 0.2 REQUIRED PATHS ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/Thirdparty/CompiledLibs/lib/cmake)
-find_package(DBoW3 REQUIRED)
-find_package(SuiteParse REQUIRED)
-find_package(Eigen3 REQUIRED)
+find_package(OpenCV 4.9.0 REQUIRED PATHS ${THIRD_PARTY_PATH}/lib/cmake/opencv4)
+find_package(Pangolin 0.2 REQUIRED PATHS ${THIRD_PARTY_PATH}/lib/cmake/Pangolin)
+find_package(DBoW3 REQUIRED PATHS ${THIRD_PARTY_PATH}/lib/cmake/DBoW3)
+
+# Use custom Find modules
+find_package(SuiteParse REQUIRED MODULE)
+find_package(Eigen3 REQUIRED MODULE)
+find_package(G2O REQUIRED)
+
 find_package(Boost COMPONENTS system thread REQUIRED)
-
-# Set paths
-set(FSLAM_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM)
-set(FSLAM_LIBRARY_PATH ${HARDCODED_PROJECT_DIR}/colcon_ws/src/FSLAM/build/lib)
-
-# Set values from environment variables if not already set
-if (NOT FSLAM_PATH)
-    set(FSLAM_PATH $ENV{FSLAM_PATH})
-endif()
-if (NOT FSLAM_LIBRARY_PATH)
-    set(FSLAM_LIBRARY_PATH $ENV{FSLAM_LIBRARY_PATH})
-    if (NOT FSLAM_LIBRARY_PATH AND FSLAM_PATH)
-        set(FSLAM_LIBRARY_PATH "${FSLAM_PATH}/build/lib")
-    endif()
-endif()
 
 # Find FSLAM library and headers
 if (FSLAM_PATH)
-    # Manually set path to FSLAM source folder
     message("FSLAM_PATH set, trying to find library.")
     message("---- EXPECTING FSLAM sources at\n\"${FSLAM_PATH}\"")
-    set(FSLAM_INCLUDE_DIRS "${FSLAM_PATH}/src" "${FSLAM_PATH}/Thirdparty/Sophus" "${FSLAM_PATH}/Thirdparty/g2o" "${FSLAM_PATH}/Thirdparty/DBow3" "${FSLAM_PATH}/Thirdparty/opencv-4.9.0")
+    set(FSLAM_INCLUDE_DIRS 
+        "${FSLAM_PATH}/src"
+        "${FSLAM_PATH}/Thirdparty/Sophus"
+        "${FSLAM_PATH}/Thirdparty/g2o"
+        "${FSLAM_PATH}/Thirdparty/DBow3"
+        "${FSLAM_PATH}/Thirdparty/opencv-4.9.0"
+    )
     message("---- LOOKING FOR FSLAM library at\n\"${FSLAM_LIBRARY_PATH}\"")
     find_library(FSLAM_LIBRARY HSLAM_lib ${FSLAM_LIBRARY_PATH})
 else()
-    message("FSLAM_PATH not set yet, trying to find installed fslam headers and library.")
-    find_path(FSLAM_INCLUDE_DIRS FSLAM)
-    if (FSLAM_INCLUDE_DIRS)
-        set(FSLAM_INCLUDE_DIRS "${FSLAM_INCLUDE_DIRS}/FSLAM")
-        message("---- FOUND FSLAM headers at \"${FSLAM_INCLUDE_DIRS}\"")
-    endif()
-    find_library(FSLAM_LIBRARY fslam)
+    message(FATAL_ERROR "FSLAM_PATH not set. Please set FSLAM_PATH.")
 endif()
 
 if (NOT FSLAM_INCLUDE_DIRS)
@@ -68,19 +78,43 @@ endif()
 
 message("---- Found FSLAM library at \"${FSLAM_LIBRARY}\"")
 
+if (G2O_INCLUDE_DIR)
+    set(G2O_INCLUDE_DIRS ${G2O_INCLUDE_DIR})
+endif()
+
+
 # Include directories
 include_directories(
-  ${PROJECT_SOURCE_DIR}/src
-  ${FSLAM_INCLUDE_DIRS}
-  ${Pangolin_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS}
-  ${EIGEN3_INCLUDE_DIR}
+    ${PROJECT_SOURCE_DIR}/src
+    ${FSLAM_INCLUDE_DIRS}
+    ${Pangolin_INCLUDE_DIRS}
+    ${OpenCV_INCLUDE_DIRS}
+    ${EIGEN3_INCLUDE_DIR}
+    ${G2O_INCLUDE_DIR}
+    ${DBoW3_INCLUDE_DIRS}
+    ${SUITEPARSE_INCLUDE_DIRS}
+    ${THIRD_PARTY_PATH}/include
+    ${CHOLMOD_INCLUDE_DIR}
 )
 
 # Declare a C++ executable
 add_executable(fslam_live src/main.cpp)
 
-# Link libraries
+# Specify libraries to link against
+target_link_libraries(fslam_live
+    ${FSLAM_LIBRARY}
+    ${Pangolin_LIBRARIES}
+    ${OpenCV_LIBS}
+    ${Boost_LIBRARIES}
+    ${EIGEN3_LIBS}
+    ${G2O_LIBS}
+    ${DBoW3_LIB_DIR}/libDBoW3.so
+    ${SUITEPARSE_LIBRARIES}
+    cxsparse
+    cholmod
+)
+
+# Link ROS2 dependencies
 ament_target_dependencies(fslam_live
     rclcpp
     sensor_msgs
@@ -88,16 +122,9 @@ ament_target_dependencies(fslam_live
     cv_bridge
 )
 
-target_link_libraries(fslam_live
-    ${FSLAM_LIBRARY}
-    ${Pangolin_LIBRARIES}
-    ${OpenCV_LIBS}
-    ${Boost_LIBRARIES}
-)
-
 # Install
 install(TARGETS fslam_live
-  DESTINATION lib/${PROJECT_NAME}
+    DESTINATION lib/${PROJECT_NAME}
 )
 
 ament_package()
