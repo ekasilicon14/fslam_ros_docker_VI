@@ -79,7 +79,7 @@ RUN mkdir -p build && cd build && cmake .. -DCMAKE_BUILD_TYPE=RelwithDebInfo && 
 #copy fslam_ros wrapper and build using colcon
 COPY fslam_ros /colcon_ws/src/fslam_ros
 WORKDIR /colcon_ws/
-RUN colcon build --packages-select fslam_ros
+RUN . /opt/ros/humble/setup.sh  \ colcon build --packages-select fslam_ros
 
 #Source colcon and specify the entry point of the container    
 RUN sed --in-place --expression \
