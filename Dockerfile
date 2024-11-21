@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 RUN apt-get update && apt-get install -y ros-humble-usb-cam
 #Install system wide dependencies
 RUN apt-get install -y \
-    libgl1-mes-dev \
+    libgl1-mesa-dev \
     libglew-dev \
     libsuitesparse-dev \
     libeigen3-dev \
